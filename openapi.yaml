@@ -8,7 +8,7 @@ info:
     Replace server URLs with your real domains.
 
 servers:
-  - url: https://openapi.teeinblue.com
+  - url: https://api.teeinblue.com/openapi/v1
     description: Production
   - url: https://staging-api.teeinblue.com/openapi/v1
     description: Staging
