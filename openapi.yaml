@@ -1,0 +1,532 @@
+openapi: 3.1.0
+info:
+  title: Teeinblue Public API
+  version: "1.0.0"
+  description: |
+    Public API for retrieving order data. Authenticated endpoints require a Bearer token
+    that has the **orders:read** ability (as enforced by `ability:orders:read` middleware).
+    Replace server URLs with your real domains.
+
+servers:
+  - url: https://openapi.teeinblue.com
+    description: Production
+  - url: https://staging-api.teeinblue.com/openapi/v1
+    description: Staging
+
+tags:
+  - name: Health
+    description: Service status and version
+  - name: Orders
+    description: Read-only access to orders
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+              examples:
+                ok:
+                  value: { status: ok }
+
+  /version:
+    get:
+      tags: [Health]
+      summary: API version
+      operationId: getVersion
+      responses:
+        '200':
+          description: Current API version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Version'
+              examples:
+                v1:
+                  value: { version: "1.0.0" }
+
+  /orders:
+    get:
+      tags: [Orders]
+      summary: List orders
+      description: |
+        Returns a cursor-paginated list of orders visible to the authenticated user.
+        This endpoint requires a token with the **orders:read** ability.
+      operationId: listOrders
+      security:
+        - bearerAuth: []
+      x-required-ability: orders:read
+      parameters:
+        - $ref: '#/components/parameters/s'
+        - $ref: '#/components/parameters/sort'
+        - $ref: '#/components/parameters/sort_type'
+        - $ref: '#/components/parameters/per_page'
+        - $ref: '#/components/parameters/start_date'
+        - $ref: '#/components/parameters/end_date'
+        - $ref: '#/components/parameters/status'
+        - $ref: '#/components/parameters/fulfillment_status'
+        - $ref: '#/components/parameters/financial_status'
+        - $ref: '#/components/parameters/test'
+        - $ref: '#/components/parameters/by_teeinblue'
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/platform'
+      responses:
+        '200':
+          description: List of orders (cursor-paginated)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderCursorPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /orders/{orderId}:
+    get:
+      tags: [Orders]
+      summary: Get order by ID
+      description: |
+        Fetch a single order by **internal order ID** or **platform-specific ID**.
+        Requires **orders:read** ability.
+      operationId: getOrder
+      security:
+        - bearerAuth: []
+      x-required-ability: orders:read
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          description: Internal order ID or platform-linked ID suffix (e.g., `etsy_12345` or `12345`).
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Order found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicOrder'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notFound:
+                  value: { message: "Order not found" }
+
+  /orders/etsy:
+    get:
+      tags: [Orders]
+      summary: List Etsy orders
+      description: |
+        Convenience wrapper for **/orders** that implicitly filters `platform=etsy`.
+        Requires **orders:read** ability.
+      operationId: listEtsyOrders
+      security:
+        - bearerAuth: []
+      x-required-ability: orders:read
+      parameters:
+        - $ref: '#/components/parameters/s'
+        - $ref: '#/components/parameters/sort'
+        - $ref: '#/components/parameters/sort_type'
+        - $ref: '#/components/parameters/per_page'
+        - $ref: '#/components/parameters/start_date'
+        - $ref: '#/components/parameters/end_date'
+        - $ref: '#/components/parameters/status'
+        - $ref: '#/components/parameters/fulfillment_status'
+        - $ref: '#/components/parameters/financial_status'
+        - $ref: '#/components/parameters/test'
+        - $ref: '#/components/parameters/by_teeinblue'
+        - $ref: '#/components/parameters/cursor'
+      responses:
+        '200':
+          description: List of Etsy orders (cursor-paginated)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderCursorPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /orders/etsy/{etsyId}:
+    get:
+      tags: [Orders]
+      summary: Get Etsy order by order ID
+      description: |
+        Fetch a single Etsy order by its Etsy order ID.
+        Requires **orders:read** ability.
+      operationId: getEtsyOrder
+      security:
+        - bearerAuth: []
+      x-required-ability: orders:read
+      parameters:
+        - name: etsyId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Etsy order ID (e.g., `1234567890`)
+      responses:
+        '200':
+          description: Etsy order found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicOrder'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Etsy order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notFound:
+                  value: { message: "Etsy order not found" }
+
+  /stores/{platformDomain}/orders:
+    get:
+      tags: [Orders]
+      summary: List orders for specific store
+      description: |
+        Returns orders for a specific store identified by platform domain.
+        Requires **orders:read** ability.
+      operationId: listStoreOrders
+      security:
+        - bearerAuth: []
+      x-required-ability: orders:read
+      parameters:
+        - name: platformDomain
+          in: path
+          required: true
+          description: Store platform domain (e.g., my-shop.myshopify.com)
+          schema:
+            type: string
+        - $ref: '#/components/parameters/s'
+        - $ref: '#/components/parameters/sort'
+        - $ref: '#/components/parameters/sort_type'
+        - $ref: '#/components/parameters/per_page'
+        - $ref: '#/components/parameters/start_date'
+        - $ref: '#/components/parameters/end_date'
+        - $ref: '#/components/parameters/status'
+        - $ref: '#/components/parameters/fulfillment_status'
+        - $ref: '#/components/parameters/financial_status'
+        - $ref: '#/components/parameters/test'
+        - $ref: '#/components/parameters/by_teeinblue'
+        - $ref: '#/components/parameters/cursor'
+      responses:
+        '200':
+          description: List of store orders (cursor-paginated)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderCursorPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Store not found or access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notFound:
+                  value: { message: "Store not found or access denied" }
+
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Include `Authorization: Bearer <token>` header.
+        Token must have the **orders:read** ability.
+  parameters:
+    s:
+      name: s
+      in: query
+      description: Search order by name
+      schema: { type: string, nullable: true }
+    sort:
+      name: sort
+      in: query
+      description: Field to sort by (default `created_at`)
+      schema: { type: string, nullable: true, example: created_at }
+    sort_type:
+      name: sort_type
+      in: query
+      description: Sort direction (default `desc`)
+      schema:
+        type: string
+        nullable: true
+        enum: [asc, desc]
+        default: desc
+    per_page:
+      name: per_page
+      in: query
+      description: Items per page (cursor pagination). 1..500, default 25.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 500
+        default: 25
+    start_date:
+      name: start_date
+      in: query
+      description: Filter by created date range (start, inclusive). ISO 8601 string.
+      schema: { type: string, nullable: true, example: "2025-01-01T00:00:00Z" }
+    end_date:
+      name: end_date
+      in: query
+      description: Filter by created date range (end, inclusive). ISO 8601 string.
+      schema: { type: string, nullable: true, example: "2025-01-31T23:59:59Z" }
+    status:
+      name: status
+      in: query
+      description: Filter by internal order status
+      schema: 
+        type: string
+        nullable: true
+        enum: [created, email_sent, partial_customized, customized]
+        example: created
+    fulfillment_status:
+      name: fulfillment_status
+      in: query
+      description: Filter by fulfillment status. Use null for orders that are not fulfilled.
+      schema: 
+        type: string
+        nullable: true
+        enum: [fulfilled, partial, cancelled, not_eligible, restocked]
+    financial_status:
+      name: financial_status
+      in: query
+      description: Filter by financial status
+      schema: 
+        type: string
+        nullable: true
+        enum: [pending, authorized, partially_paid, paid, partially_refunded, refunded, voided, cancelled]
+    test:
+      name: test
+      in: query
+      description: Filter test orders (`1` for true, `0` for false). Defaults to `0` (false) to exclude test orders.
+      schema: 
+        type: string
+        enum: ["0", "1"]
+        nullable: true
+        default: "0"
+    by_teeinblue:
+      name: by_teeinblue
+      in: query
+      description: Filter orders by Teeinblue origin (`1` for true, `0` for false)
+      schema:
+        type: string
+        enum: ["0", "1"]
+        nullable: true
+    cursor:
+      name: cursor
+      in: query
+      description: Opaque pagination cursor returned by previous response
+      schema: { type: string, nullable: true }
+    platform:
+      name: platform
+      in: query
+      description: |
+        Filter by platform (enum in code). Example includes `etsy`. This is set
+        automatically for the `/orders/etsy*` endpoints.
+      schema:
+        type: string
+        nullable: true
+        example: etsy
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid authentication
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            unauthorized:
+              value: { message: "Unauthenticated." }
+    Forbidden:
+      description: Authenticated but lacking required ability
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            forbidden:
+              value: { message: "Forbidden." }
+
+  schemas:
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          example: ok
+
+    Version:
+      type: object
+      required: [version]
+      properties:
+        version:
+          type: string
+          example: "1.0.0"
+
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+
+    Address:
+      type: object
+      properties:
+        first_name: { type: string, nullable: true }
+        last_name: { type: string, nullable: true }
+        company: { type: string, nullable: true }
+        phone: { type: string, nullable: true }
+        address1: { type: string, nullable: true }
+        address2: { type: string, nullable: true }
+        city: { type: string, nullable: true }
+        province: { type: string, nullable: true }
+        province_code: { type: string, nullable: true }
+        country: { type: string, nullable: true }
+        country_code: { type: string, nullable: true, description: "ISO 2-letter country code" }
+        zip: { type: string, nullable: true }
+
+    Customer:
+      type: object
+      properties:
+        id: { type: integer }
+        platform_linked_id: { type: string, nullable: true }
+        first_name: { type: string, nullable: true }
+        last_name: { type: string, nullable: true }
+        email: { type: string, nullable: true, format: email }
+        phone: { type: string, nullable: true }
+        created_at: { type: string, format: date-time, nullable: true }
+
+    PublicOrderItem:
+      type: object
+      description: Order item schema for public API (excludes internal fields like is_editable and order relation)
+      properties:
+        id: { type: integer }
+        campaign_id: { type: integer, nullable: true }
+        customization_id: { type: integer, nullable: true }
+        title: { type: string, nullable: true }
+        fulfillment_status: 
+          type: string
+          nullable: true
+          description: "Fulfillment status. Use null for order items that are not fulfilled."
+          enum: [fulfilled, partial, cancelled, not_eligible, restocked]
+        quantity: { type: integer, nullable: true }
+        is_fulfilled: { type: boolean, nullable: true }
+        platform_sku: { type: string, nullable: true }
+        sku: { type: string, nullable: true }
+        by_teeinblue: { type: boolean, nullable: true }
+        status: { type: string, nullable: true }
+        created_at: { type: string, format: date-time, nullable: true }
+        updated_at: { type: string, format: date-time, nullable: true }
+        deleted_at: { type: string, format: date-time, nullable: true }
+        properties: { type: object, nullable: true, additionalProperties: true }
+        tracking_number: { type: string, nullable: true }
+        tracking_url: { type: string, nullable: true, format: uri }
+        shipment_carrier: { type: string, nullable: true }
+        order_item_artworks:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+          nullable: true
+        variant:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: Variant resource
+        fulfiller:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: Fulfiller resource
+
+    PublicOrder:
+      type: object
+      properties:
+        order_name: { type: string, description: "Order name/reference shown to the user" }
+        platform_order_id: { type: string, nullable: true, description: "Platform-linked order ID" }
+        test_order: { type: boolean, default: false }
+        total_price: { type: number, format: float, nullable: true }
+        currency: { type: string, nullable: true }
+        fulfillment_status: 
+          type: string
+          nullable: true
+          description: "Fulfillment status. Use null for orders that are not fulfilled."
+          enum: [fulfilled, partial, cancelled, not_eligible, restocked]
+        financial_status: 
+          type: string
+          nullable: true
+          enum: [pending, authorized, partially_paid, paid, partially_refunded, refunded, voided, cancelled]
+        status: 
+          type: string
+          nullable: true
+          description: "Internal order status"
+          enum: [created, email_sent, partial_customized, customized]
+          example: created
+        shipping_method: { type: string, nullable: true }
+        instance_name: { type: string, nullable: true, description: "Store/instance name" }
+        platform_domain: { type: string, nullable: true, description: "Platform domain (e.g., my-shop.myshopify.com)" }
+        created_at: { type: string, format: date-time, nullable: true }
+        address: { $ref: '#/components/schemas/Address' }
+        line_items:
+          type: array
+          nullable: true
+          items: { $ref: '#/components/schemas/PublicOrderItem' }
+        customer:
+          oneOf:
+            - $ref: '#/components/schemas/Customer'
+            - type: 'null'
+
+    OrderCursorPage:
+      type: object
+      description: Cursor-paginated list of PublicOrder objects
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicOrder'
+        links:
+          type: object
+          properties:
+            next: { type: string, nullable: true, format: uri }
+            prev: { type: string, nullable: true, format: uri }
+        meta:
+          type: object
+          properties:
+            per_page: { type: integer, example: 25 }
+            next_cursor: { type: string, nullable: true }
+            prev_cursor: { type: string, nullable: true }
