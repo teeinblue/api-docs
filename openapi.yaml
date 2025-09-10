@@ -856,6 +856,7 @@ components:
           description: |
             Array of individual items/products included in this order.
             Each line item represents a specific product variant with quantity and customization.
+            **Note: Only present in single order detail responses (GET /orders/{orderId}, GET /orders/etsy/{etsyId}), not in list responses.**
         customer:
           oneOf:
             - $ref: '#/components/schemas/Customer'
