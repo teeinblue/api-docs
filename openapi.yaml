@@ -104,7 +104,7 @@ paths:
         - name: orderId
           in: path
           required: true
-          description: Internal order ID or platform-linked ID suffix (e.g., `etsy_12345` or `12345`).
+          description: Platform-linked ID (e.g., `1234567890`).
           schema:
             type: string
       responses:
@@ -756,8 +756,7 @@ components:
           nullable: true
           description: |
             Original order identifier from the source platform (Shopify, Etsy, etc.).
-            Used for cross-referencing and customer service. Null for direct Teeinblue orders.
-          example: "shopify_4567890123"
+          example: "4567890123"
         test_order: 
           type: boolean
           default: false
