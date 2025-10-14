@@ -18,6 +18,8 @@ tags:
     description: Service status and version
   - name: Orders
     description: Read-only access to orders
+  - name: Campaigns
+    description: Read-only access to campaigns
 
 paths:
   /health:
@@ -254,6 +256,45 @@ paths:
                 notFound:
                   value: { message: "Store not found or access denied" }
 
+  /campaigns/{campaignId}:
+    get:
+      tags: [Campaigns]
+      summary: Get campaign by UUID
+      description: |
+        Fetch a single campaign by **UUID** and **platformDomain**.
+        Requires **campaigns:read** ability.
+      operationId: getCampaign
+      security:
+        - bearerAuth: []
+      x-required-ability: campaigns:read
+      parameters:
+        - name: UUID
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Campaign UUID (e.g., `6d823e4d-8f21-41f8-b461-e97c981880bc`)
+        - $ref: '#/components/parameters/platformDomain'
+      responses:
+        '200':
+          description: Campaign found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformCampaign'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Campaign not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notFound:
+                  value: { message: "Campaign not found" }
 
 components:
   securitySchemes:
@@ -440,6 +481,15 @@ components:
         nullable: true
         enum: [etsy, shopify, woocommerce]
       example: etsy
+    platformDomain:
+      name: shop
+      in: query
+      description: |
+        The platform domain of the shop
+      schema:
+        type: string
+        nullable: false
+      example: "my-shop.myshopify.com"
 
   responses:
     Unauthorized:
@@ -1084,3 +1134,146 @@ components:
               nullable: true
               description: "Opaque cursor string for the previous page. Use this in the cursor parameter to go back."
               example: "eyJjcmVhdGVkX2F0IjoiMjAyNS0wMS0xNCIsImlkIjo5ODc2NX0"
+
+    PlatformCampaign:
+      type: object
+      description: |
+        Details of a campaign by platform.
+      properties:
+        id:
+          type: integer
+          description: "Unique identifier for this campaign"
+          example: 1234567890
+        uuid:
+          type: string
+          description: "Unique identifier for this campaign"
+          example: "6d823e4d-8f21-41f8-b461-e97c981880bc"
+        instance_id:
+          type: number
+          description: "Instance ID of the campaign"
+          example: 1234567890
+        platform_linked_id:
+          type: number
+          description: "Platform linked ID of the campaign"
+          example: 1234567890
+        name:
+          type: string
+          description: "Name of the campaign"
+          example: "My Campaign"
+        preview_url:
+          type: string
+          description: "Preview URL of the campaign"
+          example: "https://cdn.teeinblue.com/examples/platform-mockups/preview.png"
+        preview_thumbnail:
+          type: string
+          description: "Preview thumbnail of the campaign"
+          example: "https://cdn.teeinblue.com/examples/platform-mockups/thumbnail.webp"
+        version:
+          type: number
+          description: "Version of the campaign"
+          example: 1
+        enable_artwork_variant_assignment:
+          type: boolean
+          description: "Whether artwork variant assignment is enabled"
+          example: true
+        published_at:
+          type: string
+          format: date-time
+          description: "Timestamp when the campaign was published"
+          example: "2025-01-15T10:30:00Z"
+        created_at:
+          type: string
+          format: date-time
+          description: "Timestamp when the campaign was created"
+          example: "2025-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: "Timestamp when the campaign was last updated"
+          example: "2025-01-15T10:30:00Z"
+        artworks:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlatformArtwork'
+          description: "Artworks in the campaign"
+        mockups:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlatformMockup'
+          description: "Mockups in the campaign"
+
+    PlatformArtwork:
+      type: object
+      description: |
+        Public artwork information including name, description, and status.
+      properties:
+        id:
+          type: integer
+          description: "Unique identifier for this artwork"
+          example: 1234567890
+        name:
+          type: string
+          description: "Name of the artwork"
+          example: "My Artwork"
+        description:
+          type: string
+          description: "Description of the artwork"
+          example: "My Artwork Description"
+        width:
+          type: integer
+          description: "Width of the artwork"
+          example: 1000
+        height:
+          type: integer
+          description: "Height of the artwork"
+          example: 1000
+        thumbnail:
+          type: string
+          description: "Thumbnail of the artwork"
+          example: "https://cdn.teeinblue.com/examples/platform-mockups/thumbnail.webp"
+        status:
+          type: number
+          description: "Status of the artwork"
+          example: 1
+        position:
+          type: number
+          description: "Position of the artwork"
+          example: 1
+        platform_variants_id:
+          type: array
+          items:
+            type: number
+          description: "Platform variants ID of the artwork"
+          example: [1234567890, 1234567891]
+    
+    PlatformMockup:
+      type: object
+      description: |
+        Public mockup information including name, description, and status.
+      properties:
+        id:
+          type: integer
+          description: "Unique identifier for this mockup"
+          example: 1234567890
+        width:
+          type: integer
+          description: "Width of the mockup"
+          example: 1000
+        height:
+          type: integer
+          description: "Height of the mockup"
+          example: 1000
+        platform_variants_id:
+          type: array
+          items:
+            type: number
+          description: "Platform variants ID of the mockup"
+          example: [1234567890, 1234567891]
+        preview_url:
+          type: string
+          description: "Preview URL of the mockup"
+          example: "https://cdn.teeinblue.com/examples/platform-mockups/preview.png"
+        preview_thumbnail:
+          type: string
+          description: "Preview thumbnail of the mockup"
+          example: "https://cdn.teeinblue.com/examples/platform-mockups/thumbnail.webp"
