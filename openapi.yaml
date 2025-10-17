@@ -484,6 +484,7 @@ components:
     platformDomain:
       name: shop
       in: query
+      required: true
       description: |
         The platform domain of the shop
       schema:
