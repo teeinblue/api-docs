@@ -714,7 +714,19 @@ components:
         status: 
           type: string
           nullable: true
-          description: "Internal item processing status. Tracks customization and preparation workflow."
+          description: |
+            Internal item processing status. Tracks customization and preparation workflow.
+            - `1`: Generating
+            - `2`: Ready to fulfill
+            - `3`: Paused
+            - `6`: Sending
+            - `7`: Error
+            - `8`: Sent
+            - `9`: Fulfilled
+            - `10`: Cancelled
+            - `11`: Pending custom
+            - `12`: Customized
+            - `13`: Missing customization
           example: "ready_for_production"
         created_at: 
           type: string
@@ -732,7 +744,7 @@ components:
           type: string
           format: date-time
           nullable: true
-          description: "Soft deletion timestamp. Null if item is active. Used for cancelled/refunded items."
+          description: "Soft deletion timestamp. Null if item is active. Items with non-null deleted_at are displayed with status `Archived` in TIB portal."
           example: null
         properties: 
           type: object
@@ -867,6 +879,29 @@ components:
             - `customized`: All customization work completed, ready for fulfillment
           enum: [created, email_sent, partial_customized, customized]
           example: "customized"
+        tib_status:
+          type: string
+          nullable: true
+          description: |
+            Internal Teeinblue processing status tracking order lifecycle. Represents the lifecycle of order customization:
+            - `1`: Awaiting customization
+            - `2`: Generating
+            - `3`: Partially generating
+            - `4`: Paused
+            - `5`: Partially paused
+            - `6`: Ready
+            - `7`: Partially ready
+            - `8`: Sending
+            - `9`: Partially sending
+            - `10`: Sent
+            - `11`: Partially sent
+            - `12`: Fulfilled
+            - `13`: Partially fulfilled
+            - `14`: Error
+            - `15`: Partially error
+            - `16`: Cancelled
+            - `17`: Missing customization
+          example: "1"
         shipping_method: 
           type: string
           nullable: true
@@ -893,6 +928,12 @@ components:
           format: date-time
           nullable: true
           description: "Timestamp when the order was first created/placed"
+          example: "2025-01-15T10:30:00Z"
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: "Timestamp when the order was soft deleted. Orders with non-null deleted_at are displayed with TIB status `Archived` in the portal."
           example: "2025-01-15T10:30:00Z"
         address: 
           allOf:
