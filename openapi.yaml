@@ -73,6 +73,7 @@ paths:
         - $ref: '#/components/parameters/start_date'
         - $ref: '#/components/parameters/end_date'
         - $ref: '#/components/parameters/status'
+        - $ref: '#/components/parameters/tib_status'
         - $ref: '#/components/parameters/fulfillment_status'
         - $ref: '#/components/parameters/financial_status'
         - $ref: '#/components/parameters/test'
@@ -193,6 +194,7 @@ paths:
         - $ref: '#/components/parameters/start_date'
         - $ref: '#/components/parameters/end_date'
         - $ref: '#/components/parameters/status'
+        - $ref: '#/components/parameters/tib_status'
         - $ref: '#/components/parameters/fulfillment_status'
         - $ref: '#/components/parameters/financial_status'
         - $ref: '#/components/parameters/test'
@@ -318,6 +320,7 @@ paths:
         - $ref: '#/components/parameters/start_date'
         - $ref: '#/components/parameters/end_date'
         - $ref: '#/components/parameters/status'
+        - $ref: '#/components/parameters/tib_status'
         - $ref: '#/components/parameters/fulfillment_status'
         - $ref: '#/components/parameters/financial_status'
         - $ref: '#/components/parameters/test'
@@ -523,6 +526,34 @@ components:
         nullable: true
         enum: [created, email_sent, partial_customized, customized]
         example: created
+    tib_status:
+      name: tib_status
+      in: query
+      description: |
+        Filter by internal Teeinblue order processing status. Represents the lifecycle of order customization:
+        - `1`: Awaiting customization
+        - `2`: Generating
+        - `3`: Partially generating
+        - `4`: Paused
+        - `5`: Partially paused
+        - `6`: Ready
+        - `7`: Partially ready
+        - `8`: Sending
+        - `9`: Partially sending
+        - `10`: Sent
+        - `11`: Partially sent
+        - `12`: Fulfilled
+        - `13`: Partially fulfilled
+        - `14`: Error
+        - `15`: Partially error
+        - `16`: Cancelled
+        - `17`: Missing customization
+      example: "1"
+      schema: 
+        type: string
+        nullable: true
+        enum: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+        example: 1
     fulfillment_status:
       name: fulfillment_status
       in: query
