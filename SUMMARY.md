@@ -20,3 +20,23 @@
         kind: openapi
         spec: teeinblue-api-api
   ```
+* ```yaml
+  props:
+    models: true
+  type: builtin:openapi
+  dependencies:
+    spec:
+      ref:
+        kind: openapi
+        spec: teeinblue-api
+  ```
+* ```yaml
+  props:
+    models: true
+  type: builtin:openapi
+  dependencies:
+    spec:
+      ref:
+        kind: openapi
+        spec: teeinblue-api-api
+  ```
