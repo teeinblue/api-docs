@@ -151,7 +151,7 @@ paths:
         - name: orderId
           in: path
           required: true
-          description: Platform-linked ID (e.g., `1234567890`).
+          description: Platform-linked ID (e.g., `1234567890`) or Teeinblue order ID (e.g., `12345`), platform-linked ID takes precedence.
           schema:
             type: string
       responses:
@@ -273,7 +273,7 @@ paths:
           required: true
           schema:
             type: string
-          description: Etsy order ID (e.g., `1234567890`)
+          description: Etsy order ID (e.g., `1234567890`) or Teeinblue order ID (e.g., `12345`), Etsy order ID takes precedence.
       responses:
         '200':
           description: Etsy order found
@@ -971,6 +971,10 @@ components:
         Complete order information including customer details, line items, shipping, and payment status.
         Represents a single customer order that may contain multiple items and customizations.
       properties:
+        id:
+          type: integer
+          description: "Unique Teeinblue identifier for this order"
+          example: 12345
         order_name: 
           type: string
           description: |
