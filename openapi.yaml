@@ -89,7 +89,8 @@ paths:
                 $ref: '#/components/schemas/OrderCursorPage'
               example:
                 data:
-                  - order_name: "#1001"
+                  - id: 12345
+                    order_name: "#1001"
                     platform_order_id: "4567890123"
                     test_order: false
                     total_price: 29.99
@@ -154,6 +155,7 @@ paths:
           description: Platform-linked ID (e.g., `1234567890`) or Teeinblue order ID (e.g., `12345`), platform-linked ID takes precedence.
           schema:
             type: string
+        - $ref: '#/components/parameters/includeCustomization'
       responses:
         '200':
           description: Order found
@@ -209,7 +211,8 @@ paths:
                 $ref: '#/components/schemas/OrderCursorPage'
               example:
                 data:
-                  - order_name: "#1001"
+                  - id: 12345
+                    order_name: "#1001"
                     platform_order_id: "4567890123"
                     test_order: false
                     total_price: 29.99
@@ -274,6 +277,7 @@ paths:
           schema:
             type: string
           description: Etsy order ID (e.g., `1234567890`) or Teeinblue order ID (e.g., `12345`), Etsy order ID takes precedence.
+        - $ref: '#/components/parameters/includeCustomization'
       responses:
         '200':
           description: Etsy order found
@@ -335,7 +339,8 @@ paths:
                 $ref: '#/components/schemas/OrderCursorPage'
               example:
                 data:
-                  - order_name: "#1001"
+                  - id: 12345
+                    order_name: "#1001"
                     platform_order_id: "4567890123"
                     test_order: false
                     total_price: 29.99
@@ -654,6 +659,14 @@ components:
         type: string
         nullable: false
       example: "my-shop.myshopify.com"
+    includeCustomization:
+      name: include_customization
+      in: query
+      required: false
+      description: Include customization data and customer uploads in the response
+      schema:
+        type: boolean
+      example: true
 
   responses:
     Unauthorized:
@@ -809,6 +822,22 @@ components:
           nullable: true
           description: "When this customer record was first created in the system"
           example: "2024-12-01T09:15:00Z"
+
+    CustomerUpload:
+      type: object
+      description: |
+        Customer upload information for a print area.
+      properties:
+        original_url: 
+          type: string
+          format: uri
+          description: "Original URL of the customer upload"
+          example: "https://cdn.teeinblue.com/uploads/567-upload.jpg"
+        master_url: 
+          type: string
+          format: uri
+          description: "Master URL of the customer upload"
+          example: "https://cdn.teeinblue.com/uploads/567-upload.jpg"
 
     PublicOrderItem:
       type: object
@@ -1174,6 +1203,18 @@ components:
             Indicates if artwork is currently being generated or processed. 
             True when artwork is being created, resized, or converted. False when complete or failed.
           example: false
+        customization:
+          type: object
+          nullable: true
+          description: "Customization data for this print area"
+          example: { "Text layer": "Lorem ipsum dolor sit amet" }
+        customer_uploads:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerUpload'
+          nullable: true
+          description: "Customer uploads for this print area"
+          example: [ { "original_url": "https://cdn.teeinblue.com/uploads/567-upload.jpg", "master_url": "https://cdn.teeinblue.com/uploads/567-upload.jpg" } ]
         created_at:
           type: string
           format: date-time
