@@ -1215,6 +1215,35 @@ components:
           nullable: true
           description: "Customer uploads for this print area"
           example: [ { "original_url": "https://cdn.teeinblue.com/uploads/567-upload.jpg", "master_url": "https://cdn.teeinblue.com/uploads/567-upload.jpg" } ]
+        artworks:
+          type: array
+          nullable: true
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+                description: "Unique identifier for this artwork"
+                example: 123
+              name:
+                type: string
+                description: "Name of the artwork"
+                example: "Photo on live preview"
+              templates:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                      description: "Unique identifier for this template"
+                      example: 123
+                    name:
+                      type: string
+                      description: "Name of the template"
+                      example: "Default template"
+          description: "Artworks for this print area"
+          example: [ { "id": 123, "name": "Photo on live preview", "templates": [ { "id": 123, "name": "Default template" } ] } ]
         created_at:
           type: string
           format: date-time
