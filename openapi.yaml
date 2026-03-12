@@ -436,6 +436,142 @@ paths:
                 notFound:
                   value: { message: "Campaign not found" }
 
+  /campaigns/product-base:
+    get:
+      tags: [Campaigns]
+      summary: List product base campaigns
+      description: |
+        List all product base campaigns.
+        Requires **campaigns:read** ability.
+      operationId: listProductBaseCampaigns
+      security:
+        - bearerAuth: []
+      x-required-ability: campaigns:read
+      parameters:
+        - $ref: '#/components/parameters/s'
+        - $ref: '#/components/parameters/sort'
+        - $ref: '#/components/parameters/sort_type'
+        - $ref: '#/components/parameters/per_page'
+        - $ref: '#/components/parameters/cursor'
+      responses:
+        '200':
+          description: List of product base campaigns (cursor-paginated)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductBaseCampaignCursorPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /campaigns/product-base/{id}:
+    get:
+      tags: [Campaigns]
+      summary: Get a product base campaign by ID
+      description: |
+        Fetch a single product base campaign by its ID.
+        Requires **campaigns:read** ability.
+      operationId: getProductBaseCampaignById
+      security:
+        - bearerAuth: []
+      x-required-ability: campaigns:read
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string  
+          description: Product base campaign ID (e.g., `1245`)
+      responses:
+        '200':
+          description: Product base campaign found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductBaseCampaign'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Product base campaign not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notFound:
+                  value: { message: "Product base campaign not found" }
+
+  /campaigns/platform-base:
+    get:
+      tags: [Campaigns]
+      summary: List platform base campaigns
+      description: |
+        List all platform base campaigns.
+        Requires **campaigns:read** ability.
+      operationId: listPlatformBaseCampaigns
+      security:
+        - bearerAuth: []
+      x-required-ability: campaigns:read
+      parameters:
+        - $ref: '#/components/parameters/s'
+        - $ref: '#/components/parameters/sort'
+        - $ref: '#/components/parameters/sort_type'
+        - $ref: '#/components/parameters/per_page'
+        - $ref: '#/components/parameters/cursor'
+      responses:
+        '200':
+          description: List of platform base campaigns (cursor-paginated)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformBaseCampaignCursorPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /campaigns/platform-base/{id}:
+    get:
+      tags: [Campaigns]
+      summary: Get a platform base campaign by ID
+      description: |
+        Fetch a single platform base campaign by its ID.
+        Requires **campaigns:read** ability.
+      operationId: getPlatformBaseCampaignById
+      security:
+        - bearerAuth: []
+      x-required-ability: campaigns:read
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Platform base campaign ID (e.g., `1245`)
+      responses:
+        '200':
+          description: Platform base found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformCampaign'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Platform base not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notFound:
+                  value: { message: "Platform base not found" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1368,51 +1504,87 @@ components:
           description: "When this fulfillment record was created (item sent to fulfillment)"
           example: "2025-01-15T10:30:00Z"
 
-    OrderCursorPage:
+    CursorPageLinks:
+      type: object
+      description: "Navigation URLs for cursor-based pagination."
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          description: "URL to fetch the next page of results. Null if this is the last page."
+        prev:
+          type: string
+          nullable: true
+          format: uri
+          description: "URL to fetch the previous page of results. Null if this is the first page."
+
+    CursorPageMeta:
+      type: object
+      description: "Pagination metadata for cursor-based pagination."
+      properties:
+        per_page:
+          type: integer
+          description: "Number of items requested per page."
+        next_cursor:
+          type: string
+          nullable: true
+          description: "Opaque cursor for the next page. Use in the cursor parameter for subsequent requests."
+        prev_cursor:
+          type: string
+          nullable: true
+          description: "Opaque cursor for the previous page. Use in the cursor parameter to go back."
+
+    CursorPageEnvelope:
       type: object
       description: |
-        Cursor-paginated response containing a list of PublicOrder objects.
-        Uses cursor-based pagination for efficient handling of large datasets.
+        Common envelope for cursor-paginated list responses. List endpoints return an object
+        with `data` (array of items), `links` (next/prev URLs), and `meta` (per_page, cursors).
+      required: [links, meta]
       properties:
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/PublicOrder'
-          description: "Array of order objects for the current page"
         links:
-          type: object
-          description: "Navigation URLs for pagination"
-          properties:
-            next: 
-              type: string
-              nullable: true
-              format: uri
-              description: "URL to fetch the next page of results. Null if this is the last page."
-              example: "https://api.teeinblue.com/openapi/v1/orders?cursor=eyJjcmVhdGVkX2F0IjoiMjAyNS0wMS0xNSIsImlkIjoxMjM0NX0&per_page=25"
-            prev: 
-              type: string
-              nullable: true
-              format: uri
-              description: "URL to fetch the previous page of results. Null if this is the first page."
-              example: "https://api.teeinblue.com/openapi/v1/orders?cursor=eyJjcmVhdGVkX2F0IjoiMjAyNS0wMS0xNCIsImlkIjo5ODc2NX0&per_page=25"
+          $ref: '#/components/schemas/CursorPageLinks'
         meta:
-          type: object
-          description: "Pagination metadata"
+          $ref: '#/components/schemas/CursorPageMeta'
+
+    OrderCursorPage:
+      type: object
+      description: "Cursor-paginated list of orders."
+      allOf:
+        - $ref: '#/components/schemas/CursorPageEnvelope'
+        - type: object
           properties:
-            per_page: 
-              type: integer
-              description: "Number of items requested per page"
-              example: 25
-            next_cursor: 
-              type: string
-              nullable: true
-              description: "Opaque cursor string for the next page. Use this in the cursor parameter for subsequent requests."
-              example: "eyJjcmVhdGVkX2F0IjoiMjAyNS0wMS0xNSIsImlkIjoxMjM0NX0"
-            prev_cursor: 
-              type: string
-              nullable: true
-              description: "Opaque cursor string for the previous page. Use this in the cursor parameter to go back."
-              example: "eyJjcmVhdGVkX2F0IjoiMjAyNS0wMS0xNCIsImlkIjo5ODc2NX0"
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/PublicOrder'
+              description: "Array of order objects for the current page."
+
+    ProductBaseCampaignCursorPage:
+      type: object
+      description: "Cursor-paginated list of product base campaigns."
+      allOf:
+        - $ref: '#/components/schemas/CursorPageEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ProductBaseCampaign'
+              description: "Array of product base campaign objects for the current page."
+
+    PlatformBaseCampaignCursorPage:
+      type: object
+      description: "Cursor-paginated list of platform base campaigns."
+      allOf:
+        - $ref: '#/components/schemas/CursorPageEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/PlatformCampaign'
+              description: "Array of platform base campaign objects for the current page."
 
     PlatformCampaign:
       type: object
@@ -1473,7 +1645,7 @@ components:
         artworks:
           type: array
           items:
-            $ref: '#/components/schemas/PlatformArtwork'
+            $ref: '#/components/schemas/Artwork'
           description: "Artworks in the campaign"
         mockups:
           type: array
@@ -1481,7 +1653,7 @@ components:
             $ref: '#/components/schemas/PlatformMockup'
           description: "Mockups in the campaign"
 
-    PlatformArtwork:
+    Artwork:
       type: object
       description: |
         Public artwork information including name, description, and status.
@@ -1556,3 +1728,74 @@ components:
           type: string
           description: "Preview thumbnail of the mockup"
           example: "https://cdn.teeinblue.com/examples/platform-mockups/thumbnail.webp"
+
+    ProductBaseMockup:
+      type: object
+      description: |
+        Public mockup information including name, description, and status.
+      properties:
+        id:
+          type: integer
+          description: "Unique identifier for this mockup"
+          example: 1234567890
+        width:
+          type: integer
+          description: "Width of the mockup"
+          example: 1000
+        height:
+          type: integer
+          description: "Height of the mockup"
+          example: 1000
+        position:
+          type: number
+          description: "Position of the mockup"
+          example: 1
+        preview_url:
+          type: string
+          description: "Preview URL of the mockup"
+          example: "https://cdn.teeinblue.com/examples/platform-mockups/preview.png"
+        preview_thumbnail:
+          type: string
+          description: "Preview thumbnail of the mockup"
+          example: "https://cdn.teeinblue.com/examples/platform-mockups/thumbnail.webp"
+
+    ProductBaseCampaign:
+      type: object
+      description: |
+        Product base campaign information including name, description, and status.
+      properties:
+        id:
+          type: integer
+          description: "Unique identifier for this product base campaign"
+          example: 1234567890
+        name:
+          type: string
+          description: "Name of the product base campaign"
+          example: "My Product Base Campaign"
+        status:
+          type: number
+          description: |
+            Status of the product base campaign:
+            - `0`: Default
+            - `1`: Archived
+          example: 1
+        created_at:
+          type: string
+          format: date-time
+          description: "Timestamp when the product base campaign was created"
+          example: "2025-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: "Timestamp when the product base campaign was last updated"
+          example: "2025-01-15T10:30:00Z"
+        artworks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Artwork'
+          description: "Artworks in the product base campaign"
+        mockups:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductBaseMockup'
+          description: "Mockups in the product base campaign"
