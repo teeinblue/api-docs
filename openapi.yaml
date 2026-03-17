@@ -20,6 +20,8 @@ tags:
     description: Read-only access to orders
   - name: Campaigns
     description: Read-only access to campaigns
+  - name: Products
+    description: Read-only access to products
 
 paths:
   /health:
@@ -573,6 +575,73 @@ paths:
                 notFound:
                   value: { message: "Platform base not found" }
 
+  /products:
+    get:
+      tags: [Products]
+      summary: List products
+      description: |
+        List all products.
+        Requires **products:read** ability.
+      operationId: listProducts
+      security:
+        - bearerAuth: []
+      x-required-ability: products:read
+      parameters:
+        - $ref: '#/components/parameters/s'
+        - $ref: '#/components/parameters/sort'
+        - $ref: '#/components/parameters/sort_type'
+        - $ref: '#/components/parameters/per_page'
+        - $ref: '#/components/parameters/cursor'
+      responses:
+        '200':
+          description: List of products (cursor-paginated)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductCursorPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /products/{id}:
+    get:
+      tags: [Products]
+      summary: Get product by ID
+      description: |
+        Fetch a single product by its ID.
+        Requires **products:read** ability.
+      operationId: getProductById
+      security:
+        - bearerAuth: []
+      x-required-ability: products:read
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Product ID (e.g., `1245`)
+      responses:
+        '200':
+          description: Product found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notFound:
+                  value: { message: "Product not found" }
 components:
   securitySchemes:
     bearerAuth:
@@ -1835,3 +1904,140 @@ components:
           items:
             $ref: '#/components/schemas/ProductBaseMockup'
           description: "Mockups in the product base campaign"
+
+    ProductCursorPage:
+      type: object
+      description: "Cursor-paginated list of products."
+      allOf:
+        - $ref: '#/components/schemas/CursorPageEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/Product'
+              description: "Array of product objects for the current page."
+
+    Product:
+      type: object
+      description: |
+        Product information including name, description, and status.
+      properties:
+        id:
+          type: integer
+          description: "Unique identifier for this product"
+          example: 1234567890
+        title:
+          type: string
+          description: "Title of the product"
+          example: "Holiday T-Shirt"
+        label:
+          type: string
+          description: "Internal name of the product"
+        internal_tags:
+          type: string
+          description: "Internal tags of the product"
+          example: "holiday, t-shirt"
+        created_at:
+          type: string
+          format: date-time
+          description: "Timestamp when the product was created"
+          example: "2025-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: "Timestamp when the product was last updated"
+          example: "2025-01-15T10:30:00Z"
+        mockups:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductMockup'
+          description: "Mockups of the product"
+        printareas:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductPrintArea'
+          description: |
+            All print areas of the product.
+            **Note: Only present in single product detail responses.**
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductBaseVariant'
+          description: |
+            All variants of the product.
+            **Note: Only present in single product detail responses.**
+
+    ProductMockup:
+      type: object
+      description: |
+        Product mockup information including name, description, and status.
+      properties:
+        id:
+          type: integer
+          description: "Unique identifier for this mockup"
+          example: 1234567890
+        url:
+          type: string
+          description: "URL of the mockup"
+          example: "https://cdn.teeinblue.com/examples/products/mockup.png"
+        width:
+          type: integer
+          description: "Width of the mockup"
+          example: 1000
+        height:
+          type: integer
+          description: "Height of the mockup"
+          example: 1000
+
+    ProductPrintArea:
+      type: object
+      description: |
+        Product print area information including name, description, and status.
+      properties:
+        id:
+          type: integer
+          description: "Unique identifier for this print area"
+          example: 1234567890
+        name:
+          type: string
+          description: "Name of the print area"
+          example: "Front"
+        width:
+          type: integer
+          description: "Width of the print area"
+          example: 1000
+        height:
+          type: integer
+          description: "Height of the print area"
+          example: 1000
+        position:
+          type: number
+          description: "Position of the print area"
+          example: 1
+        display_name:
+          type: string
+          description: "Display name of the print area"
+          example: "Front"
+
+    ProductBaseVariant:
+      type: object
+      description: |
+        Product base variant information including name, description, and status.
+      properties:
+        id:
+          type: integer
+          description: "Unique identifier for this variant"
+          example: 1234567890
+        sku:
+          type: string
+          description: "SKU of the variant"
+          example: "TSHIRT-BELLA-LG-NAVY"
+        color:
+          type: string
+          description: "Color of the variant"
+          example: "Navy Blue"
+        size:
+          type: string
+          description: "Size of the variant"
+          example: "Large"
