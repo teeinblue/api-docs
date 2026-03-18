@@ -527,7 +527,7 @@ components:
         Field to sort the results by. Determines the primary ordering of returned orders.
         Most commonly used fields: `created_at` for chronological order, `total_price` for value-based sorting.
         Default is `created_at` when not specified.
-      schema: 
+      schema:
         type: string
         nullable: true
         enum: [created_at, total_price, updated_at]
@@ -566,7 +566,7 @@ components:
         Filter orders created on or after this date (inclusive). Must be a valid ISO 8601 datetime string.
         Used with `end_date` to create date ranges. Timezone should be UTC (Z suffix) or include offset.
         Useful for retrieving orders from specific time periods or recent orders since last sync.
-      schema: 
+      schema:
         type: string
         format: date-time
         nullable: true
@@ -578,7 +578,7 @@ components:
         Filter orders created on or before this date (inclusive). Must be a valid ISO 8601 datetime string.
         Used with `start_date` to create date ranges. Should be later than start_date if both are provided.
         Timezone should be UTC (Z suffix) or include offset for consistency.
-      schema: 
+      schema:
         type: string
         format: date-time
         nullable: true
@@ -592,7 +592,7 @@ components:
         - `email_sent`: Notification sent to customer
         - `partial_customized`: Some items customized, others pending
         - `customized`: All customization completed, ready for fulfillment
-      schema: 
+      schema:
         type: string
         nullable: true
         enum: [created, email_sent, partial_customized, customized]
@@ -620,7 +620,7 @@ components:
         - `16`: Cancelled
         - `17`: Missing customization
       example: "1"
-      schema: 
+      schema:
         type: string
         nullable: true
         enum: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
@@ -636,7 +636,7 @@ components:
         - `not_eligible`: Items cannot be fulfilled (e.g., discontinued products)
         - `restocked`: Items returned to inventory
         - `null`: Orders not yet sent for fulfillment (pending or in processing)
-      schema: 
+      schema:
         type: string
         nullable: true
         enum: [fulfilled, partial, cancelled, not_eligible, restocked]
@@ -654,7 +654,7 @@ components:
         - `refunded`: Full refund issued
         - `voided`: Payment cancelled before capture
         - `cancelled`: Order payment cancelled
-      schema: 
+      schema:
         type: string
         nullable: true
         enum: [pending, authorized, partially_paid, paid, partially_refunded, refunded, voided, cancelled]
@@ -668,7 +668,7 @@ components:
         - `"0"`: Include ONLY live orders (production data)
         - omit parameter: Include ONLY live orders (default behavior)
         Note: Most production integrations should use `"0"` or omit this parameter entirely.
-      schema: 
+      schema:
         type: string
         enum: ["0", "1"]
         nullable: true
@@ -696,7 +696,7 @@ components:
         returned in the `meta.next_cursor` field of the previous response. Do not manually construct
         cursor values - always use the exact string provided by the API. For first page requests,
         omit this parameter entirely.
-      schema: 
+      schema:
         type: string
         nullable: true
       example: "eyJjcmVhdGVkX2F0IjoiMjAyNS0wMS0xNSAxMDozMDowMCIsImlkIjoxMjM0NX0"
@@ -775,62 +775,62 @@ components:
         Shipping address information for order delivery.
         Contains standardized address fields compatible with most shipping carriers.
       properties:
-        first_name: 
+        first_name:
           type: string
           nullable: true
           description: "Recipient's first name"
           example: "John"
-        last_name: 
+        last_name:
           type: string
           nullable: true
           description: "Recipient's last name"
           example: "Smith"
-        company: 
+        company:
           type: string
           nullable: true
           description: "Company name for business deliveries. Optional for residential addresses."
           example: "Acme Corporation"
-        phone: 
+        phone:
           type: string
           nullable: true
           description: "Contact phone number for delivery. May be required by some carriers."
           example: "+1-555-123-4567"
-        address1: 
+        address1:
           type: string
           nullable: true
           description: "Primary street address line (street number, street name)"
           example: "123 Main Street"
-        address2: 
+        address2:
           type: string
           nullable: true
           description: "Secondary address line (apartment, suite, unit number)"
           example: "Apt 4B"
-        city: 
+        city:
           type: string
           nullable: true
           description: "City/town name"
           example: "New York"
-        province: 
+        province:
           type: string
           nullable: true
           description: "Full state/province name"
           example: "New York"
-        province_code: 
+        province_code:
           type: string
           nullable: true
           description: "State/province abbreviation code (e.g., 'NY', 'CA', 'ON')"
           example: "NY"
-        country: 
+        country:
           type: string
           nullable: true
           description: "Full country name"
           example: "United States"
-        country_code: 
+        country_code:
           type: string
           nullable: true
           description: "ISO 3166-1 alpha-2 country code (2 letters)"
           example: "US"
-        zip: 
+        zip:
           type: string
           nullable: true
           description: "Postal/ZIP code"
@@ -843,9 +843,9 @@ components:
           description: |
             Single Etsy order update item used in batch update operations.
           properties:
-            platform_order_id:
+            etsy_id:
               type: string
-              description: "Etsy platform order ID for this update item"
+              description: "Etsy order ID (e.g., `1234567890`) or Teeinblue order ID (e.g., `12345`), Etsy order ID takes precedence."
               example: "1234567890"
 
     BatchUpdateEtsyOrderResponseItem:
@@ -853,9 +853,9 @@ components:
       description: |
         Single Etsy order update response item used in batch update operations.
       properties:
-        platform_order_id:
+        etsy_id:
           type: string
-          description: "Etsy platform order ID for this update item"
+          description: "Etsy order ID for this update item (matches with the request item's `etsy_id` )"
           example: "1234567890"
         status:
           type: string
@@ -881,39 +881,39 @@ components:
         Customer information associated with an order.
         May contain personal details for account holders or limited info for guest checkouts.
       properties:
-        id: 
+        id:
           type: integer
           description: "Unique internal customer identifier in Teeinblue system"
           example: 12345
-        platform_linked_id: 
+        platform_linked_id:
           type: string
           nullable: true
           description: |
             Customer identifier from the originating platform (Shopify customer ID, Etsy user ID, etc.).
             Used for syncing customer data and linking repeat purchases. Null for direct Teeinblue customers.
           example: "shopify_customer_987654321"
-        first_name: 
+        first_name:
           type: string
           nullable: true
           description: "Customer's first name"
           example: "Jane"
-        last_name: 
+        last_name:
           type: string
           nullable: true
           description: "Customer's last name"
           example: "Doe"
-        email: 
+        email:
           type: string
           nullable: true
           format: email
           description: "Customer's email address for order updates and support"
           example: "jane.doe@example.com"
-        phone: 
+        phone:
           type: string
           nullable: true
           description: "Customer's phone number for delivery coordination"
           example: "+1-555-987-6543"
-        created_at: 
+        created_at:
           type: string
           format: date-time
           nullable: true
@@ -927,26 +927,26 @@ components:
         Contains product details, customization information, fulfillment tracking, and artwork data.
         Excludes internal fields like is_editable and order relation for external API consumers.
       properties:
-        id: 
+        id:
           type: integer
           description: "Unique identifier for this order item"
           example: 12345
-        campaign_id: 
+        campaign_id:
           type: integer
           nullable: true
           description: "Internal campaign ID if this item is from a Teeinblue campaign. Null for non-campaign items."
           example: 6789
-        customization_id: 
+        customization_id:
           type: integer
           nullable: true
           description: "ID linking to customization data (artwork, personalization). Null for non-customizable items."
           example: 9876
-        title: 
+        title:
           type: string
           nullable: true
           description: "Product title/name as displayed to customer. May include variant details like size/color."
           example: "Custom T-Shirt - Large, Navy Blue"
-        fulfillment_status: 
+        fulfillment_status:
           type: string
           nullable: true
           description: |
@@ -959,32 +959,32 @@ components:
             - `null`: Not yet sent for fulfillment
           enum: [fulfilled, partial, cancelled, not_eligible, restocked]
           example: fulfilled
-        quantity: 
+        quantity:
           type: integer
           nullable: true
           description: "Number of units ordered for this item"
           example: 2
-        is_fulfilled: 
+        is_fulfilled:
           type: boolean
           nullable: true
           description: "Quick boolean check if item has been fulfilled. Computed from fulfillment_status."
           example: true
-        platform_sku: 
+        platform_sku:
           type: string
           nullable: true
           description: "SKU as defined in the original platform (Shopify, Etsy, etc.). Used for inventory sync."
           example: "TSHIRT-LG-NAVY"
-        sku: 
+        sku:
           type: string
           nullable: true
           description: "Internal Teeinblue SKU. May differ from platform_sku due to customization or variant mapping."
           example: "TB-TSHIRT-LG-NAVY-001"
-        by_teeinblue: 
+        by_teeinblue:
           type: boolean
           nullable: true
           description: "True if this item uses Teeinblue's print-on-demand service. False for merchant's own products."
           example: true
-        status: 
+        status:
           type: string
           nullable: true
           description: |
@@ -1001,25 +1001,25 @@ components:
             - `12`: Customized
             - `13`: Missing customization
           example: "ready_for_production"
-        created_at: 
+        created_at:
           type: string
           format: date-time
           nullable: true
           description: "When this order item was first created"
           example: "2025-01-15T10:30:00Z"
-        updated_at: 
+        updated_at:
           type: string
           format: date-time
           nullable: true
           description: "When this order item was last modified"
           example: "2025-01-15T14:45:00Z"
-        deleted_at: 
+        deleted_at:
           type: string
           format: date-time
           nullable: true
           description: "Soft deletion timestamp. Null if item is active. Items with non-null deleted_at are displayed with status `Archived` in TIB portal."
           example: null
-        properties: 
+        properties:
           type: object
           nullable: true
           additionalProperties: true
@@ -1029,18 +1029,18 @@ components:
             - Custom product options
             - Third-party integration data
           example: { "gift_message": "Happy Birthday!", "rush_order": true }
-        tracking_number: 
+        tracking_number:
           type: string
           nullable: true
           description: "Shipping tracking number provided by carrier. Available after item ships."
           example: "1Z999AA1234567890"
-        tracking_url: 
+        tracking_url:
           type: string
           nullable: true
           format: uri
           description: "Direct URL to track shipment on carrier's website. Generated from tracking_number."
           example: "https://www.ups.com/track?tracknum=1Z999AA1234567890"
-        shipment_carrier: 
+        shipment_carrier:
           type: string
           nullable: true
           description: "Shipping carrier name (UPS, FedEx, USPS, etc.). Set when item ships."
@@ -1085,26 +1085,26 @@ components:
           type: integer
           description: "Unique Teeinblue identifier for this order"
           example: 12345
-        order_name: 
+        order_name:
           type: string
           description: |
             Human-readable order identifier shown to customers and staff.
             Format varies by platform (e.g., '#1001', 'ORDER-2025-001', etc.)
           example: "#1001"
-        platform_order_id: 
+        platform_order_id:
           type: string
           nullable: true
           description: |
             Original order identifier from the source platform (Shopify, Etsy, etc.).
           example: "4567890123"
-        test_order: 
+        test_order:
           type: boolean
           default: false
           description: |
             Indicates if this is a test/sandbox order created during development or store setup.
             Test orders should not be included in sales reports or fulfillment.
           example: false
-        total_price: 
+        total_price:
           type: number
           format: float
           nullable: true
@@ -1112,12 +1112,12 @@ components:
             Total order value including items, shipping, taxes, and discounts.
             Always in the currency specified by the currency field.
           example: 29.99
-        currency: 
+        currency:
           type: string
           nullable: true
           description: "ISO 4217 currency code for all monetary values in this order"
           example: "USD"
-        fulfillment_status: 
+        fulfillment_status:
           type: string
           nullable: true
           description: |
@@ -1130,7 +1130,7 @@ components:
             - `null`: Not yet sent for fulfillment (still processing)
           enum: [fulfilled, partial, cancelled, not_eligible, restocked]
           example: "fulfilled"
-        financial_status: 
+        financial_status:
           type: string
           nullable: true
           description: |
@@ -1145,7 +1145,7 @@ components:
             - `cancelled`: Payment cancelled by customer or system
           enum: [pending, authorized, partially_paid, paid, partially_refunded, refunded, voided, cancelled]
           example: "paid"
-        status: 
+        status:
           type: string
           nullable: true
           description: |
@@ -1194,28 +1194,28 @@ components:
           nullable: true
           description: "Note for the order"
           example: "Please send to the address below: 123 Main St, Anytown, USA"
-        shipping_method: 
+        shipping_method:
           type: string
           nullable: true
           description: |
             Shipping service selected by customer or assigned by merchant.
             Examples: 'Standard Shipping', 'Express', 'Priority Mail', etc.
           example: "Standard Shipping"
-        instance_name: 
+        instance_name:
           type: string
           nullable: true
           description: |
             Name of the store/instance where this order was placed.
             Useful for multi-store merchants to identify the sales channel.
           example: "My Awesome T-Shirt Store"
-        platform_domain: 
+        platform_domain:
           type: string
           nullable: true
           description: |
             Domain/URL of the originating platform store.
             Examples: 'my-shop.myshopify.com', 'mystore.etsy.com', 'example.com'
           example: "my-shop.myshopify.com"
-        created_at: 
+        created_at:
           type: string
           format: date-time
           nullable: true
@@ -1227,14 +1227,14 @@ components:
           nullable: true
           description: "Timestamp when the order was soft deleted. Orders with non-null deleted_at are displayed with TIB status `Archived` in the portal."
           example: "2025-01-15T10:30:00Z"
-        address: 
+        address:
           allOf:
             - $ref: '#/components/schemas/Address'
           description: "Customer shipping address for this order"
         line_items:
           type: array
           nullable: true
-          items: 
+          items:
             $ref: '#/components/schemas/PublicOrderItem'
           description: |
             Array of individual items/products included in this order.
@@ -1296,7 +1296,7 @@ components:
         is_processing:
           type: boolean
           description: |
-            Indicates if artwork is currently being generated or processed. 
+            Indicates if artwork is currently being generated or processed.
             True when artwork is being created, resized, or converted. False when complete or failed.
           example: false
         created_at:
@@ -1438,13 +1438,13 @@ components:
           type: object
           description: "Navigation URLs for pagination"
           properties:
-            next: 
+            next:
               type: string
               nullable: true
               format: uri
               description: "URL to fetch the next page of results. Null if this is the last page."
               example: "https://api.teeinblue.com/openapi/v1/orders?cursor=eyJjcmVhdGVkX2F0IjoiMjAyNS0wMS0xNSIsImlkIjoxMjM0NX0&per_page=25"
-            prev: 
+            prev:
               type: string
               nullable: true
               format: uri
@@ -1454,16 +1454,16 @@ components:
           type: object
           description: "Pagination metadata"
           properties:
-            per_page: 
+            per_page:
               type: integer
               description: "Number of items requested per page"
               example: 25
-            next_cursor: 
+            next_cursor:
               type: string
               nullable: true
               description: "Opaque cursor string for the next page. Use this in the cursor parameter for subsequent requests."
               example: "eyJjcmVhdGVkX2F0IjoiMjAyNS0wMS0xNSIsImlkIjoxMjM0NX0"
-            prev_cursor: 
+            prev_cursor:
               type: string
               nullable: true
               description: "Opaque cursor string for the previous page. Use this in the cursor parameter to go back."
@@ -1579,7 +1579,7 @@ components:
             type: number
           description: "Platform variants ID of the artwork"
           example: [1234567890, 1234567891]
-    
+
     PlatformMockup:
       type: object
       description: |
