@@ -109,6 +109,7 @@ paths:
                     address:
                       first_name: "John"
                       last_name: "Smith"
+                      name: "John Smith"
                       company: null
                       phone: "+1-555-123-4567"
                       address1: "123 Main Street"
@@ -231,6 +232,7 @@ paths:
                     address:
                       first_name: "John"
                       last_name: "Smith"
+                      name: "John Smith"
                       company: null
                       phone: "+1-555-123-4567"
                       address1: "123 Main Street"
@@ -300,6 +302,77 @@ paths:
               examples:
                 notFound:
                   value: { message: "Etsy order not found" }
+    patch:
+      tags: [Orders]
+      summary: Update Etsy order
+      description: |
+        Update a single Etsy order by its Etsy order ID.
+        Requires **orders:write** ability.
+      operationId: updateEtsyOrder
+      security:
+        - bearerAuth: []
+      x-required-ability: orders:write
+      parameters:
+        - name: etsyId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Etsy order ID (e.g., `1234567890`) or Teeinblue order ID (e.g., `12345`), Etsy order ID takes precedence.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEtsyOrderRequest"
+      responses:
+        '200':
+          description: Etsy order updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicOrder'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Etsy order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /orders/etsy/batch-update:
+    patch:
+      tags: [Orders]
+      summary: Batch update Etsy orders
+      description: |
+        Batch update Etsy orders by their Etsy order IDs.
+        Requires **orders:write** ability.
+      operationId: batchUpdateEtsyOrders
+      security:
+        - bearerAuth: []
+      x-required-ability: orders:write
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: "#/components/schemas/BatchUpdateEtsyOrderRequestItem"
+      responses:
+        "200":
+          description: Etsy orders updated
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BatchUpdateEtsyOrderResponseItem"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
   /stores/{platformDomain}/orders:
     get:
@@ -359,6 +432,7 @@ paths:
                     address:
                       first_name: "John"
                       last_name: "Smith"
+                      name: "John Smith"
                       company: null
                       phone: "+1-555-123-4567"
                       address1: "123 Main Street"
@@ -956,6 +1030,11 @@ components:
           nullable: true
           description: "Recipient's last name"
           example: "Smith"
+        name:
+          type: string
+          nullable: true
+          description: "Recipient's full name, based on first_name and last_name"
+          example: "John Smith"
         company:
           type: string
           nullable: true
@@ -1006,6 +1085,45 @@ components:
           nullable: true
           description: "Postal/ZIP code"
           example: "10001"
+
+    BatchUpdateEtsyOrderRequestItem:
+      allOf:
+        - $ref: "#/components/schemas/UpdateEtsyOrderRequest"
+        - type: object
+          description: |
+            Single Etsy order update item used in batch update operations.
+          properties:
+            etsy_id:
+              type: string
+              description: "Etsy order ID (e.g., `1234567890`) or Teeinblue order ID (e.g., `12345`), Etsy order ID takes precedence."
+              example: "1234567890"
+
+    BatchUpdateEtsyOrderResponseItem:
+      type: object
+      description: |
+        Single Etsy order update response item used in batch update operations.
+      properties:
+        etsy_id:
+          type: string
+          description: "Etsy order ID for this update item (matches with the request item's `etsy_id` )"
+          example: "1234567890"
+        status:
+          type: string
+          description: |
+            Status of the update item
+            - `success`: Order updated successfully
+            - `fail`: Order not updated due to errors
+          example: "success"
+        order:
+          nullable: true
+          type: object
+          $ref: "#/components/schemas/PublicOrder"
+          description: "Order details for this update item, if successful"
+        errors:
+          type: object
+          nullable: true
+          description: "Errors for this update item, if any"
+          example: { "message": "Order not found" }
 
     Customer:
       type: object
@@ -1327,6 +1445,21 @@ components:
             - `16`: Cancelled
             - `17`: Missing customization
           example: "1"
+        email:
+          type: string
+          nullable: true
+          description: "Email address of the customer"
+          example: "jane.doe@example.com"
+        contact_email:
+          type: string
+          nullable: true
+          description: "Contact email for the order"
+          example: "jane.doe@example.com"
+        note:
+          type: string
+          nullable: true
+          description: "Note for the order"
+          example: "Please send to the address below: 123 Main St, Anytown, USA"
         shipping_method:
           type: string
           nullable: true
@@ -1833,6 +1966,36 @@ components:
           type: string
           description: "Preview thumbnail of the mockup"
           example: "https://cdn.teeinblue.com/examples/platform-mockups/thumbnail.webp"
+    UpdateEtsyOrderRequest:
+      type: object
+      description: |
+        Request body for updating an Etsy order.
+      properties:
+        fulfillment_shipping_method:
+          type: string
+          nullable: true
+          description: "Fulfillment shipping method"
+          example: "Standard Shipping"
+        note:
+          type: string
+          nullable: true
+          description: "Note for the order"
+          example: "This is a test note"
+        email:
+          type: string
+          nullable: true
+          description: "Email of the customer"
+          example: "jane.doe@example.com"
+        contact_email:
+          type: string
+          nullable: true
+          description: "Contact email for the order"
+          example: "jane.doe@example.com"
+        shipping_address:
+          allOf:
+            - $ref: '#/components/schemas/Address'
+          nullable: true
+          description: "Shipping address for the order"
 
     ProductBaseMockup:
       type: object
