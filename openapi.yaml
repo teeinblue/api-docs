@@ -1981,6 +1981,30 @@ components:
           type: string
           description: "URL of the mockup"
           example: "https://cdn.teeinblue.com/examples/products/mockup.png"
+        thumbnail:
+          type: string
+          description: "Thumbnail URL of the mockup"
+          example: "https://cdn.teeinblue.com/examples/products/mockup.png"
+        master:
+          type: string
+          description: "Master URL of the mockup"
+          example: "https://cdn.teeinblue.com/examples/products/mockup.png"
+        old_url:
+          type: string
+          description: "Old URL of the mockup"
+          example: "https://cdn.teeinblue.com/examples/products/mockup.png"
+        preview_url:
+          type: string
+          description: "Preview URL of the mockup"
+          example: "https://cdn.teeinblue.com/examples/products/mockup.png"
+        preview_thumbnail:
+          type: string
+          description: "Preview thumbnail URL of the mockup"
+          example: "https://cdn.teeinblue.com/examples/products/mockup.png"
+        alt:
+          type: string
+          description: "Alternative text for the mockup"
+          example: "Holiday T-Shirt"
         width:
           type: integer
           description: "Width of the mockup"
@@ -2001,7 +2025,7 @@ components:
           example: 1234567890
         name:
           type: string
-          description: "Name of the print area"
+          description: "Name of the print area, displayed as `Fulfilled key` in the portal's product detail page if the `display_name` is not set"
           example: "Front"
         width:
           type: integer
@@ -2017,7 +2041,7 @@ components:
           example: 1
         display_name:
           type: string
-          description: "Display name of the print area"
+          description: "Display name of the print area, displayed as `Fulfilled key` in the portal's product detail page"
           example: "Front"
 
     ProductBaseVariant:
