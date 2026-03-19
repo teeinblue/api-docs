@@ -106,6 +106,7 @@ paths:
                     address:
                       first_name: "John"
                       last_name: "Smith"
+                      name: "John Smith"
                       company: null
                       phone: "+1-555-123-4567"
                       address1: "123 Main Street"
@@ -226,6 +227,7 @@ paths:
                     address:
                       first_name: "John"
                       last_name: "Smith"
+                      name: "John Smith"
                       company: null
                       phone: "+1-555-123-4567"
                       address1: "123 Main Street"
@@ -423,6 +425,7 @@ paths:
                     address:
                       first_name: "John"
                       last_name: "Smith"
+                      name: "John Smith"
                       company: null
                       phone: "+1-555-123-4567"
                       address1: "123 Main Street"
@@ -785,6 +788,11 @@ components:
           nullable: true
           description: "Recipient's last name"
           example: "Smith"
+        name:
+          type: string
+          nullable: true
+          description: "Recipient's full name, based on first_name and last_name"
+          example: "John Smith"
         company:
           type: string
           nullable: true
