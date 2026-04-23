@@ -10,8 +10,6 @@ info:
 servers:
   - url: https://api.teeinblue.com/openapi/v1
     description: Production
-  - url: https://staging-api.teeinblue.com/openapi/v1
-    description: Staging
 
 tags:
   - name: Health
@@ -724,7 +722,7 @@ components:
       bearerFormat: JWT
       description: |
         Include `Authorization: Bearer <token>` header.
-        Token must have the **orders:read** ability.
+        Token must have the required abilities.
   parameters:
     s:
       name: s
