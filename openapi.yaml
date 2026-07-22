@@ -18,6 +18,8 @@ tags:
     description: Read-only access to orders
   - name: Campaigns
     description: Read-only access to campaigns
+  - name: Customizations
+    description: Read-only access to customizations
   - name: Products
     description: Read-only access to products
 
@@ -647,6 +649,82 @@ paths:
                 notFound:
                   value: { message: "Platform base not found" }
 
+  /customizations:
+    get:
+      tags: [Customizations]
+      summary: List customizations
+      description: |
+        Returns a cursor-paginated list of customizations visible to the authenticated user.
+        Requires **customizations:read OR orders:read** ability.
+      operationId: listCustomizations
+      security:
+        - bearerAuth: []
+      x-required-ability: customizations:read | orders:read
+      parameters:
+        - $ref: '#/components/parameters/s'
+        - $ref: '#/components/parameters/sort'
+        - $ref: '#/components/parameters/sort_type'
+        - $ref: '#/components/parameters/per_page'
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/start_date'
+        - $ref: '#/components/parameters/end_date'
+        - $ref: '#/components/parameters/instance_ids'
+        - $ref: '#/components/parameters/campaign_ids'
+        - $ref: '#/components/parameters/platform_product_ids'
+        - $ref: '#/components/parameters/includeData'
+      responses:
+        '200':
+          description: List of customizations (cursor-paginated)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomizationCursorPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /customizations/{uuid}:
+    get:
+      tags: [Customizations]
+      summary: Get customization by UUID
+      description: |
+        Fetch a single customization by its UUID.
+        Requires **customizations:read OR orders:read** ability.
+      operationId: getCustomizationByUuid
+      security:
+        - bearerAuth: []
+      x-required-ability: customizations:read | orders:read
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Customization UUID (e.g., `6d823e4d-8f21-41f8-b461-e97c981880bc`)
+        - $ref: '#/components/parameters/includeDesigns'
+        - $ref: '#/components/parameters/includeData'
+      responses:
+        '200':
+          description: Customization found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customization'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Customization not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notFound:
+                  value: { message: "Customization not found" }
+
   /products:
     get:
       tags: [Products]
@@ -968,6 +1046,66 @@ components:
       schema:
         type: boolean
       example: true
+    includeDesigns:
+      name: include_designs
+      in: query
+      required: false
+      description: Include designs data in the response
+      schema:
+        type: boolean
+      example: true
+    includeData:
+      name: include_data
+      in: query
+      required: false
+      description: |
+        Include the full 'data' and 'customer_uploads' fields in the response. These require extra
+        per-item lookups, so on the list endpoint they default to `false` and must be requested
+        explicitly. On the single-customization endpoint they default to `true`.
+      schema:
+        type: boolean
+      example: true
+    instance_ids:
+      name: instance_ids
+      in: query
+      description: |
+        Filter by one or more instance (store) IDs, scoped to the authenticated user's own instances.
+
+        Note: This API expects **array query params** in the bracket form:
+        - Single value: `instance_ids[]=123`
+        - Multiple values: `instance_ids[]=123&instance_ids[]=456`
+      style: form
+      explode: true
+      schema:
+        type: array
+        items: { type: integer }
+      example: [123, 456]
+    campaign_ids:
+      name: campaign_ids
+      in: query
+      description: |
+        Filter by one or more campaign IDs.
+
+        Note: This API expects **array query params** in the bracket form, e.g. `campaign_ids[]=6789`.
+      style: form
+      explode: true
+      schema:
+        type: array
+        items: { type: integer }
+      example: [6789]
+    platform_product_ids:
+      name: platform_product_ids
+      in: query
+      description: |
+        Filter by one or more platform product IDs.
+
+        Note: This API expects **array query params** in the bracket form, e.g. `platform_product_ids[]=321`.
+      style: form
+      explode: true
+      schema:
+        type: array
+        items: { type: integer }
+      example: [321]
 
   responses:
     Unauthorized:
@@ -1184,6 +1322,91 @@ components:
           description: "Master URL of the customer upload"
           example: "https://cdn.teeinblue.com/uploads/567-upload.jpg"
 
+    Customization:
+      type: object
+      description: |
+        Customization data for an order item, including artwork, personalization, and print area details.
+        Represents the customer's design choices and uploaded assets for production.
+      properties:
+        id:
+          type: integer
+          description: "Unique identifier for this customization"
+          example: 9876
+        uuid:
+          type: string
+          description: "Universally unique identifier (UUID) for this customization"
+          example: "6d823e4d-8f21-41f8-b461-e97c981880bc"
+        data:
+          type: object
+          description: "Raw customization data including print areas, artwork, and personalization details. Included by default on the single-customization endpoint (omit with `include_data=false`); on the list endpoint, opt in with `include_data=true`."
+          example: { "Text layer": "Lorem ipsum dolor sit amet" }
+        customer_uploads:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerUpload'
+          nullable: true
+          description: "Customer uploads for this print area. Included by default on the single-customization endpoint (omit with `include_data=false`); on the list endpoint, opt in with `include_data=true`."
+          example: [ { "original_url": "https://cdn.teeinblue.com/uploads/567-upload.jpg", "master_url": "https://cdn.teeinblue.com/uploads/567-upload.jpg" } ]
+        designs:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomizationDesign'
+          description: "Array of design data associated with this customization, returned only when `include_designs=true` is specified in the request"
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: "When this customization was first created"
+          example: "2025-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: "When this customization was last modified"
+          example: "2025-01-15T14:45:00Z"
+
+    CustomizationDesign:
+      type: object
+      description: |
+        Design data for a customization, including artwork and personalization details.
+        Represents the customer's design choices for production.
+      properties:
+        id:
+          type: integer
+          description: "Unique identifier for this design"
+          example: 5678
+        key:
+          type: string
+          description: "Key identifying the design (e.g., 'front', 'back', 'sleeve')"
+          example: "front"
+        thumbnail:
+          type: string
+          format: uri
+          description: "Thumbnail URL for this design"
+          example: "https://cdn.teeinblue.com/uploads/567-thumbnail.jpg"
+        url:
+          type: string
+          format: uri
+          description: "Full-size URL for this design"
+          example: "https://cdn.teeinblue.com/uploads/567-design.jpg"
+        width:
+          type: integer
+          description: "Width of the design in pixels"
+          example: 1000
+        height:
+          type: integer
+          description: "Height of the design in pixels"
+          example: 1200
+        error_message:
+          type: string
+          nullable: true
+          description: "Error message if there was an issue with this design (e.g., missing artwork)"
+          example: "The vector renderer does not support raster images. Please upload a vector file (SVG, EPS, PDF) for best results."
+        is_processing:
+          type: boolean
+          description: "True if the design is still being processed (e.g., generating previews)"
+          example: false
+        
     PublicOrderItem:
       type: object
       description: |
@@ -1783,6 +2006,19 @@ components:
               items:
                 $ref: '#/components/schemas/PublicOrder'
               description: "Array of order objects for the current page."
+
+    CustomizationCursorPage:
+      type: object
+      description: "Cursor-paginated list of customizations."
+      allOf:
+        - $ref: '#/components/schemas/CursorPageEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/Customization'
+              description: "Array of customization objects for the current page."
 
     ProductBaseCampaignCursorPage:
       type: object
