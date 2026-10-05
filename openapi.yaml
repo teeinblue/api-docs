@@ -16,7 +16,9 @@ tags:
   - name: Health
     description: Service status and version
   - name: Orders
-    description: Read access to orders, plus write access to Etsy order fields and order item designs
+    description: Read access to orders, plus write access to Etsy order fields
+  - name: Designs
+    description: Write access to order item print area / design files
   - name: Campaigns
     description: Read-only access to campaigns
   - name: Customizations
@@ -379,7 +381,7 @@ paths:
 
   /order-item-artworks/{orderItemArtworkId}/design:
     post:
-      tags: [Orders]
+      tags: [Designs]
       summary: Replace order item design
       description: |
         Replace the design file for an existing print area, identified by its `order_item_artwork_id`
