@@ -15,6 +15,36 @@ servers:
 tags:
   - name: Health
     description: Service status and version
+  - name: Rate Limiting
+    description: |
+      Every endpoint under `/openapi/v1` shares a single limit: **60 requests per minute**.
+
+      The limit is keyed to your account, not to the individual token -- if you use more than
+      one API token (e.g. one per script or environment), they all draw from the same 60/minute
+      budget, not 60 each.
+
+      **Response headers.** Every response includes:
+
+      | Header | Meaning |
+      |---|---|
+      | `X-RateLimit-Limit` | The limit for the current window (`60`) |
+      | `X-RateLimit-Remaining` | Requests left in the current window |
+
+      A response that hits the limit returns `429 Too Many Requests` with two more headers:
+
+      | Header | Meaning |
+      |---|---|
+      | `Retry-After` | Seconds to wait before your next request |
+      | `X-RateLimit-Reset` | Unix timestamp when the window resets |
+
+      ```json
+      {
+        "message": "Too Many Attempts."
+      }
+      ```
+
+      Back off until `Retry-After` has elapsed rather than retrying immediately -- retrying
+      before the window resets only spends more of a budget that is already at zero.
   - name: Orders
     description: Read-only access to orders
   - name: Campaigns
@@ -103,7 +133,9 @@ tags:
       do not prefix it with a domain. `thumbnail_url` is a full URL meant only for previews.
 
       **Limits.** Uploads count towards the same daily limits as uploads made in the portal.
-      When a limit is reached the API returns `429`.
+      When a limit is reached the API returns `429` (see "TooManyRequests" below for the two
+      kinds of limit that can trigger it). These daily limits are separate from the
+      account-wide per-minute request limit described in "Rate Limiting".
   - name: Layer Images
     description: Images used by image layers in artworks, grouped in layer image categories.
   - name: Cliparts
@@ -2373,13 +2405,26 @@ components:
     TooManyRequests:
       description: |
         A rate limit was reached: either the daily limit for this kind of item (shared with
-        uploads made in the portal) or the per-minute API request limit. `Retry-After` says
-        how many seconds to wait.
+        uploads made in the portal, see "Asset Libraries") or the per-minute API request limit
+        that applies account-wide (see "Rate Limiting"). `Retry-After` says how many seconds to
+        wait; the `X-RateLimit-*` headers are only populated for the per-minute limit.
       headers:
         Retry-After:
           schema:
             type: integer
           description: Seconds to wait before retrying.
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+          description: Per-minute limit only. The limit for the current window.
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+          description: Per-minute limit only. Always `0` on this response.
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+          description: Per-minute limit only. Unix timestamp when the window resets.
       content:
         application/json:
           schema:
@@ -2387,6 +2432,8 @@ components:
           examples:
             dailyLimit:
               value: { message: "Reach the limit 1000 records in 1 day. Wait until 2026-10-09 08:00:00 to try again or contact support to increase." }
+            perMinuteLimit:
+              value: { message: "Too Many Attempts." }
   schemas:
     Health:
       type: object
