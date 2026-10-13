@@ -3,10 +3,11 @@ info:
   title: Teeinblue Public API
   version: "1.0.0"
   description: |
-    Public API for retrieving order data. Authenticated endpoints require a Bearer token
-    that has the **orders:read** ability (as enforced by `ability:orders:read` middleware).
-    Asset library endpoints require **assets:read** or **assets:write** (see "Asset Libraries").
-    Replace server URLs with your real domains.
+    Public API for retrieving order data, and writing back to a small set of order fields
+    and designs. Authenticated endpoints require a Bearer token with the ability each
+    endpoint requires (see `x-required-ability` on each operation; enforced by the matching
+    `ability:*` middleware). Asset library endpoints require **assets:read** or
+    **assets:write** (see "Asset Libraries"). Replace server URLs with your real domains.
 
 servers:
   - url: https://api.teeinblue.com/openapi/v1
@@ -46,7 +47,9 @@ tags:
       Back off until `Retry-After` has elapsed rather than retrying immediately -- retrying
       before the window resets only spends more of a budget that is already at zero.
   - name: Orders
-    description: Read-only access to orders
+    description: Read access to orders, plus write access to Etsy order fields
+  - name: Designs
+    description: Write access to order item print area / design files
   - name: Campaigns
     description: Read-only access to campaigns
   - name: Customizations
@@ -259,6 +262,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
 
   /orders/{orderId}:
     get:
@@ -494,6 +499,92 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
 
+  /order-item-artworks/{orderItemArtworkId}/design:
+    post:
+      tags: [Designs]
+      summary: Replace order item design
+      description: |
+        Replace the design file for an existing print area, identified by its `order_item_artwork_id`
+        (the `id` field returned in an order's `print_areas[]` — see **Get order**). Mirrors the
+        Portal's "Replace design" action: only the file changes in place, the print area's
+        `artwork_id`/`customization_id` are untouched and no new print area is created.
+
+        Requires **orders:write** ability.
+
+        The target order item must currently be in the **Ready** status (`status: 2` on the order
+        item), or the request is rejected with `422`.
+
+        Provide exactly one of `file` (multipart upload) or `url` (JSON body, a publicly reachable
+        URL Teeinblue fetches server-side).
+
+        Whether the returned `url` stays the same on every replace (true overwrite) or changes on
+        every call depends on whether this print area is a plain custom upload or an
+        artwork/template-based design — check the `updated_at` field (or diff the `url`) rather
+        than assuming either behavior.
+      operationId: replaceOrderItemDesign
+      security:
+        - bearerAuth: []
+      x-required-ability: orders:write
+      parameters:
+        - name: orderItemArtworkId
+          in: path
+          required: true
+          description: The print area's `id`, from an order's `print_areas[].id`.
+          schema:
+            type: integer
+          example: 567
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The replacement design file (image, PDF, or PostScript).
+              required: [file]
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  description: Publicly reachable URL of the replacement design file.
+                  example: "https://your-qc-system.example.com/corrected-printfile.png"
+              required: [url]
+      responses:
+        '200':
+          description: Design replaced
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrintArea'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Print area not found, or doesn't belong to the caller's account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notFound:
+                  value: { message: "No query results for model [App\\Models\\OrderItemArtwork]." }
+        '422':
+          description: The order item isn't in the Ready status, or neither `file` nor `url` was provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notReady:
+                  value: { message: "The order item must be in the Ready status to replace its design." }
+
   /stores/{platformDomain}/orders:
     get:
       tags: [Orders]
@@ -591,6 +682,8 @@ paths:
               examples:
                 notFound:
                   value: { message: "Store not found or access denied" }
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
 
   /campaigns/{campaignId}:
     get:
@@ -803,6 +896,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
 
   /customizations/{uuid}:
     get:
@@ -1716,9 +1811,11 @@ components:
       name: start_date
       in: query
       description: |
-        Filter orders created on or after this date (inclusive). Must be a valid ISO 8601 datetime string.
-        Used with `end_date` to create date ranges. Timezone should be UTC (Z suffix) or include offset.
-        Useful for retrieving orders from specific time periods or recent orders since last sync.
+        Filter results created on or after this date (inclusive). Must be a valid ISO 8601 date or datetime
+        string; an invalid value returns a `422` error. Timezone should be UTC (Z suffix) or include offset.
+
+        Can be provided on its own, without `end_date`. If omitted, or older than 60 days ago, it is clamped
+        to 60 days ago — the maximum date range this API allows is 60 days.
       schema:
         type: string
         format: date-time
@@ -1728,9 +1825,11 @@ components:
       name: end_date
       in: query
       description: |
-        Filter orders created on or before this date (inclusive). Must be a valid ISO 8601 datetime string.
-        Used with `start_date` to create date ranges. Should be later than start_date if both are provided.
-        Timezone should be UTC (Z suffix) or include offset for consistency.
+        Filter results created on or before this date (inclusive). Must be a valid ISO 8601 date or datetime
+        string; an invalid value returns a `422` error. Timezone should be UTC (Z suffix) or include offset.
+
+        Can be provided on its own, without `start_date`. If omitted, more than 60 days after `start_date`,
+        or in the future, it is clamped to now — the maximum date range this API allows is 60 days.
       schema:
         type: string
         format: date-time
@@ -2030,7 +2129,6 @@ components:
           examples:
             forbidden:
               value: { message: "Forbidden." }
-
     NotFound:
       description: The item does not exist or does not belong to you
       content:
@@ -2121,6 +2219,19 @@ components:
       properties:
         message:
           type: string
+
+    ValidationError:
+      type: object
+      properties:
+        message:
+          type: string
+        errors:
+          type: object
+          description: Map of field name to a list of validation error messages for that field.
+          additionalProperties:
+            type: array
+            items:
+              type: string
 
     Address:
       type: object
@@ -2809,7 +2920,10 @@ components:
           type: string
           format: date-time
           nullable: true
-          description: "When this print area artwork was last modified"
+          description: |
+            When this print area artwork was last modified. Changes on every design replace --
+            useful for cache-busting a `url` that stays the same across replaces
+            (see "Replace order item design").
           example: "2025-01-15T11:15:00Z"
 
     ProductVariant:
@@ -3434,19 +3548,6 @@ components:
           type: string
           description: "Size of the variant"
           example: "Large"
-
-    ValidationError:
-      type: object
-      properties:
-        message:
-          type: string
-        errors:
-          type: object
-          description: Map of field name to a list of validation error messages for that field.
-          additionalProperties:
-            type: array
-            items:
-              type: string
 
     # -------------------------------------------------------------------------
     # Asset libraries
