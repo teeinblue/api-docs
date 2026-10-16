@@ -74,20 +74,20 @@ tags:
 
       | File | Send it as |
       |---|---|
-      | Raster image (PNG, JPEG, WebP, ...) -- layer images, cliparts | a pre-signed upload (`upload_id`), or a `url` |
+      | Raster image (PNG, JPEG, GIF, WebP) -- layer images, cliparts | a pre-signed upload (`upload_id`), or a `url` |
       | SVG / EPS -- layer images, cliparts | `multipart/form-data` with a `file` field, or a `url` |
       | GPX -- layer images | `multipart/form-data` with a `file` field, or a `url` |
 
       *Pre-signed upload (raster images).* The image bytes go straight to storage, not through this API:
-      1. `POST /uploads` with the file's `filename` (`.png`, `.jpg`, `.jpeg`, `.webp`, `.gif` or
-         `.avif`) and `filesize` (bytes). You get back an `upload_id`, an `upload_url` and the
+      1. `POST /uploads` with the file's `filename` (`.png`, `.jpg`, `.jpeg`, `.gif` or `.webp`)
+         and `filesize` (bytes). You get back an `upload_id`, an `upload_url` and the
          `upload_headers` to send with it.
       2. `PUT` the file bytes to `upload_url` with those headers before `expires_at`
          (a few minutes).
       3. Call the create endpoint (e.g. `POST /layer-images`) with `{"upload_id": "..."}`.
          The uploaded file is checked at this point: it must be exactly the `filesize` you
-         declared, at most 20 MB, and a valid image -- otherwise the upload is removed and you
-         get a `422`. If you call before your `PUT` has finished you also get a `422`; that one
+         declared, at most 20 MB, and a PNG, JPEG, GIF or WebP image -- judged from the file's
+         content, not its name -- otherwise the upload is removed and you get a `422`. If you call before your `PUT` has finished you also get a `422`; that one
          can simply be retried. Each `upload_id` can be used once.
 
       ```bash
@@ -1019,7 +1019,7 @@ paths:
         `PUT` the image bytes to, and an `upload_id` to pass to `POST /layer-images` or
         `POST /cliparts` once the bytes are uploaded.
 
-        Accepted extensions: `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.avif`. Send SVG/EPS and
+        Accepted extensions: `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`. Send SVG/EPS and
         GPX files as multipart instead.
 
         Images larger than 128 megapixels are rejected when `filewidth` and `fileheight` are given.
@@ -1219,7 +1219,7 @@ paths:
       summary: Upload a layer image
       description: |
         Upload one layer image (see "Asset Libraries" for how to send each kind of file):
-        - Raster images (PNG, JPEG, WebP, GIF, AVIF): `upload_id` from `POST /uploads`, or `url`.
+        - Raster images (PNG, JPEG, GIF, WebP): `upload_id` from `POST /uploads`, or `url`.
           Processed in the background -- returns `status: processing`.
         - SVG/EPS and GPX: multipart `file`, or `url`.
 
@@ -1492,7 +1492,7 @@ paths:
       description: |
         Upload one clipart into a `clipart` or `vector` category (see "Asset Libraries" for how
         to send each kind of file):
-        - Raster images (PNG, JPEG, WebP, GIF, AVIF): `upload_id` from `POST /uploads`, or `url`.
+        - Raster images (PNG, JPEG, GIF, WebP): `upload_id` from `POST /uploads`, or `url`.
           Processed in the background -- returns `status: processing`.
         - SVG/EPS: multipart `file`, or `url`.
 
