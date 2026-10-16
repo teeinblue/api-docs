@@ -72,6 +72,7 @@ tags:
       |---|---|---|
       | Layer images | Image layers in artworks | `clipart`, `vector`, `gpx` |
       | Cliparts | Clipart and vector pickers in artworks | `clipart`, `vector` |
+      | Library images | Masks (artwork and mockup layers), and images reused as backgrounds and thumbnails | `image`, `mask` (the image's own type; categories hold one type) |
 
       **Abilities.** Read endpoints need **assets:read**; create and delete endpoints need **assets:write**.
 
@@ -79,7 +80,7 @@ tags:
 
       | File | Send it as |
       |---|---|
-      | Raster image (PNG, JPEG, GIF, WebP) -- layer images, cliparts | a pre-signed upload (`upload_id`), or a `url` |
+      | Raster image (PNG, JPEG, GIF, WebP) -- layer images, cliparts, library images | a pre-signed upload (`upload_id`), or a `url` |
       | SVG / EPS -- layer images, cliparts | `multipart/form-data` with a `file` field, or a `url` |
       | GPX -- layer images | `multipart/form-data` with a `file` field, or a `url` |
 
@@ -134,7 +135,7 @@ tags:
       `on_duplicate` to make a re-run of your upload script safe:
       - `create` (default) -- always create a new item.
       - `skip` -- if an item with the same `name` already exists in the same category, return it
-        (`200`) without uploading.
+        (`200`) without uploading. For library images the match is on `type`, category and `name`.
       - `replace` -- **cliparts only, raster images only**: replace the image of the existing
         clipart with the same `name` in the same category, keeping its id (the portal's
         "Replace items"). As in the portal, SVG/EPS cliparts cannot be replaced.
@@ -142,6 +143,9 @@ tags:
       **Using an item in an artwork.** `url` is a storage key such as
       `users/4965/image-layers/68c0006568e69_large.webp`. Put it in a layer exactly as returned --
       do not prefix it with a domain. `thumbnail_url` is a full URL meant only for previews.
+      A library image is used the same way: a `mask` image's `url` goes into a layer's mask
+      field (e.g. `masked_url`), an `image`'s `url` into a background field (e.g.
+      `background_image`).
 
       **Limits.** Uploads count towards the same daily limits as uploads made in the portal.
       When a limit is reached the API returns `429` (see "TooManyRequests" below for the two
@@ -151,6 +155,15 @@ tags:
     description: Images used by image layers in artworks, grouped in layer image categories.
   - name: Cliparts
     description: Cliparts and vectors used by clipart pickers in artworks, grouped in clipart categories.
+  - name: Library Images
+    description: |
+      Images uploaded once and reused wherever they fit, grouped in library image categories --
+      the portal's image library. Every library image has a type, fixed when it is uploaded:
+      - `mask` -- a cut-out shape, used as the mask of an artwork or mockup layer.
+      - `image` -- any other picture: backgrounds, thumbnails, reference images, map markers.
+
+      A category holds one type only. Library images are raster images (PNG, JPEG, GIF, WebP),
+      sent as a pre-signed upload (`upload_id`) or a `url` -- not as multipart.
 paths:
   /health:
     get:
@@ -1153,8 +1166,8 @@ paths:
       summary: Create a pre-signed upload
       description: |
         Step 1 of uploading a raster image (see "Asset Libraries"). Returns an `upload_url` to
-        `PUT` the image bytes to, and an `upload_id` to pass to `POST /layer-images` or
-        `POST /cliparts` once the bytes are uploaded.
+        `PUT` the image bytes to, and an `upload_id` to pass to `POST /layer-images`,
+        `POST /cliparts` or `POST /library-images` once the bytes are uploaded.
 
         Accepted extensions: `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`. Send SVG/EPS and
         GPX files as multipart instead.
@@ -1932,6 +1945,296 @@ paths:
                       id: ["The ZIP has not been uploaded yet. PUT it to the upload_url first."]
 
   # ---------------------------------------------------------------------------
+  # ---------------------------------------------------------------------------
+  # Asset libraries: library images
+  # ---------------------------------------------------------------------------
+  /library-image-categories:
+    get:
+      tags: [Library Images]
+      summary: List library image categories
+      description: |
+        List your library image categories, newest first.
+        Requires **assets:read** ability.
+      operationId: listLibraryImageCategories
+      security:
+        - bearerAuth: []
+      x-required-ability: assets:read
+      parameters:
+        - name: type
+          in: query
+          description: Only return categories of this type.
+          schema:
+            $ref: '#/components/schemas/LibraryImageType'
+        - $ref: '#/components/parameters/assetName'
+        - $ref: '#/components/parameters/assetSearch'
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/assetPerPage'
+      responses:
+        '200':
+          description: Cursor-paginated list of library image categories
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryImageCategoryCursorPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+    post:
+      tags: [Library Images]
+      summary: Create a library image category
+      description: |
+        Create a library image category. Its `type` decides which images it can hold and cannot
+        be changed later.
+        Requires **assets:write** ability.
+      operationId: createLibraryImageCategory
+      security:
+        - bearerAuth: []
+      x-required-ability: assets:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, name]
+              properties:
+                type:
+                  $ref: '#/components/schemas/LibraryImageType'
+                name:
+                  type: string
+                  maxLength: 255
+                  example: "SKU123"
+                description:
+                  type: string
+                  nullable: true
+                on_duplicate:
+                  $ref: '#/components/schemas/CategoryOnDuplicate'
+      responses:
+        '200':
+          description: "`on_duplicate: skip` matched an existing category with the same name and type; it is returned unchanged."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryImageCategory'
+        '201':
+          description: Category created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryImageCategory'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /library-image-categories/{id}:
+    get:
+      tags: [Library Images]
+      summary: Get a library image category
+      description: Requires **assets:read** ability.
+      operationId: getLibraryImageCategory
+      security:
+        - bearerAuth: []
+      x-required-ability: assets:read
+      parameters:
+        - $ref: '#/components/parameters/assetId'
+      responses:
+        '200':
+          description: Category found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryImageCategory'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /library-images:
+    get:
+      tags: [Library Images]
+      summary: List library images
+      description: |
+        List your library images. Two ways to look an image up:
+
+        - **Listing** (no `search`): newest first, read straight from the database, so an image
+          appears as soon as it is created. Filter with `type`, `category_id` and an exact `name`.
+          Cursor-paginated (`cursor`, `per_page`).
+        - **Search** (`search` given): matched by relevance through the search index, as in the
+          portal's image library -- partial words and small typos still match, so check the
+          `name` of what comes back. Filter with `type` and `category_id`. Page-numbered
+          (`page`, `per_page`); `cursor` does not apply. The index is updated in the background,
+          so an image created a moment ago may not be found by search yet -- use the exact
+          `name` filter to find it immediately.
+
+        `name` and `search` cannot be combined.
+        Requires **assets:read** ability.
+      operationId: listLibraryImages
+      security:
+        - bearerAuth: []
+      x-required-ability: assets:read
+      parameters:
+        - name: type
+          in: query
+          description: Only return images of this type.
+          schema:
+            $ref: '#/components/schemas/LibraryImageType'
+        - $ref: '#/components/parameters/assetCategoryId'
+        - $ref: '#/components/parameters/assetName'
+        - name: search
+          in: query
+          description: |
+            Search by name, ranked by relevance through the search index (partial words and
+            small typos match). Cannot be combined with `name`.
+          schema:
+            type: string
+            maxLength: 255
+          example: "SKU123 mask"
+        - $ref: '#/components/parameters/cursor'
+        - name: page
+          in: query
+          description: Page number, for `search` results only.
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - $ref: '#/components/parameters/assetPerPage'
+      responses:
+        '200':
+          description: |
+            A page of library images. A listing returns cursor pagination (`meta.next_cursor`);
+            a search returns page numbers (`meta.current_page`, `meta.last_page`, `meta.total`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryImagePage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+    post:
+      tags: [Library Images]
+      summary: Upload a library image
+      description: |
+        Upload one library image: `upload_id` from `POST /uploads`, or `url` (see "Asset
+        Libraries"). PNG, JPEG, GIF or WebP; it is processed in the background and returns
+        `status: processing`. Multipart uploads are not accepted.
+        Requires **assets:write** ability.
+      operationId: createLibraryImage
+      security:
+        - bearerAuth: []
+      x-required-ability: assets:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/LibraryImageUploadFields'
+                - oneOf:
+                    - $ref: '#/components/schemas/AssetUploadIdUpload'
+                    - $ref: '#/components/schemas/AssetUrlUpload'
+      responses:
+        '200':
+          description: "`on_duplicate: skip` matched an existing library image of the same type and name in the same category; it is returned unchanged."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryImage'
+        '201':
+          description: "Library image created with `status: processing`."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryImage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /library-images/{id}:
+    get:
+      tags: [Library Images]
+      summary: Get a library image
+      description: |
+        Fetch one library image. Poll this after an upload until `status` is `ready`.
+        Requires **assets:read** ability.
+      operationId: getLibraryImage
+      security:
+        - bearerAuth: []
+      x-required-ability: assets:read
+      parameters:
+        - $ref: '#/components/parameters/assetId'
+      responses:
+        '200':
+          description: Library image found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryImage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Library Images]
+      summary: Delete a library image
+      description: |
+        Delete a library image. As in the portal, it is kept (`422`) while it is still being
+        processed, or while anything uses it -- products, campaigns, clipart categories,
+        cliparts, mockups, artworks or global options. The response then lists what uses it, so
+        you can free it first.
+
+        An image whose processing has not finished after 60 minutes is treated as failed and
+        can be deleted.
+        Requires **assets:write** ability.
+      operationId: deleteLibraryImage
+      security:
+        - bearerAuth: []
+      x-required-ability: assets:write
+      parameters:
+        - $ref: '#/components/parameters/assetId'
+      responses:
+        '204':
+          description: Library image deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: The image is still being processed, or is in use.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LibraryImageInUse'
+              examples:
+                inUse:
+                  value:
+                    message: "This image is still in use."
+                    usages:
+                      - { type: "artwork", id: 1234, name: "SKU123 Mug" }
+                      - { type: "product", id: 56, name: "Classic Mug" }
+                processing:
+                  value:
+                    message: "This image is still being processed."
+
 components:
   securitySchemes:
     bearerAuth:
@@ -4259,3 +4562,167 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/Clipart'
+
+    LibraryImageType:
+      type: string
+      enum: [image, mask]
+      description: |
+        - `mask`: a cut-out shape, used as the mask of an artwork or mockup layer.
+        - `image`: any other picture -- backgrounds, thumbnails, reference images, map markers.
+
+    LibraryImageCategory:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 42
+        type:
+          $ref: '#/components/schemas/LibraryImageType'
+        name:
+          type: string
+          example: "SKU123"
+        description:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-10-16T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-10-16T10:30:00Z"
+
+    LibraryImageUploadFields:
+      type: object
+      required: [type]
+      properties:
+        type:
+          $ref: '#/components/schemas/LibraryImageType'
+        name:
+          type: string
+          maxLength: 255
+          description: Name of the library image. Defaults to the file name without its extension.
+          example: "SKU123_mask"
+        category_id:
+          type: integer
+          nullable: true
+          description: One of your library image categories, of the same `type`.
+          example: 42
+        on_duplicate:
+          $ref: '#/components/schemas/AssetOnDuplicate'
+
+    LibraryImage:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 7788
+        type:
+          $ref: '#/components/schemas/LibraryImageType'
+        category_id:
+          type: integer
+          nullable: true
+          example: 42
+        name:
+          type: string
+          example: "SKU123_mask"
+        status:
+          $ref: '#/components/schemas/AssetStatus'
+        url:
+          type: string
+          nullable: true
+          description: Storage key to put in a layer's mask or background field, exactly as returned. `null` while processing.
+          example: "users/4965/library/68c0006568e69_large.webp"
+        thumbnail_url:
+          type: string
+          format: uri
+          nullable: true
+          description: Full URL of a small preview. `null` while processing.
+          example: "https://cdn.teeinblue.com/users/4965/library/68c0006568e69_thumb.webp"
+        width:
+          type: integer
+          nullable: true
+          example: 2000
+        height:
+          type: integer
+          nullable: true
+          example: 2000
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-10-16T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-10-16T10:30:05Z"
+
+    LibraryImageInUse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "This image is still in use."
+        usages:
+          type: array
+          description: |
+            What uses the image (up to 20 of each kind). Absent when the image is refused because
+            it is still being processed.
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                enum: [product, campaign, clipart_category, clipart, mockup, campaign_mockup, artwork, global_option]
+              id:
+                type: integer
+              name:
+                type: string
+                nullable: true
+
+    LibraryImageCategoryCursorPage:
+      type: object
+      description: "Cursor-paginated list of library image categories."
+      allOf:
+        - $ref: '#/components/schemas/CursorPageEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/LibraryImageCategory'
+
+    LibraryImagePage:
+      type: object
+      description: |
+        A page of library images: `data`, `links` and `meta`. A listing fills the cursor fields
+        of `meta` (as other cursor-paginated lists); a search fills the page-number fields.
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/LibraryImage'
+        links:
+          $ref: '#/components/schemas/CursorPageLinks'
+        meta:
+          type: object
+          properties:
+            per_page:
+              type: integer
+            next_cursor:
+              type: string
+              nullable: true
+              description: Listing only. Pass as `cursor` for the next page.
+            prev_cursor:
+              type: string
+              nullable: true
+              description: Listing only.
+            current_page:
+              type: integer
+              description: Search only.
+            last_page:
+              type: integer
+              description: Search only.
+            total:
+              type: integer
+              description: Search only. Number of matches.
