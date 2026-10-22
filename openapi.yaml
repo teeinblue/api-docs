@@ -2197,8 +2197,8 @@ paths:
       description: |
         Delete a library image. As in the portal, it is kept (`422`) while it is still being
         processed, or while anything uses it -- products, campaigns, clipart categories,
-        cliparts, mockups, artworks or global options. The response then lists what uses it, so
-        you can free it first.
+        mockups, artworks or global options. The response then lists what uses it, so you can
+        free it first.
 
         An image whose processing has not finished after 60 minutes is treated as failed and
         can be deleted.
@@ -4673,7 +4673,7 @@ components:
             properties:
               type:
                 type: string
-                enum: [product, campaign, clipart_category, clipart, mockup, campaign_mockup, artwork, global_option]
+                enum: [product, campaign, clipart_category, mockup, campaign_mockup, artwork, global_option]
               id:
                 type: integer
               name:
