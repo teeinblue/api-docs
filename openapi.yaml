@@ -1078,7 +1078,18 @@ paths:
       tags: [Layer Images]
       summary: List layer image categories
       description: |
-        List your layer image categories, newest first.
+        List your layer image categories. Two ways to look one up:
+
+        - **Listing** (no `search`): newest first, read straight from the database, so a category
+          appears as soon as it is created. Filter with `type` and an exact `name`.
+          Cursor-paginated (`cursor`, `per_page`).
+        - **Search** (`search` given): matched by relevance through the search index, as in the
+          MCP tools -- partial words and small typos still match, so check the `name` of what
+          comes back. Filter with `type`. Page-numbered (`page`, `per_page`); `cursor` does
+          not apply. The index is updated in the background, so a category created a moment ago
+          may not be found by search yet -- use the exact `name` filter to find it immediately.
+
+        `name` and `search` cannot be combined.
         Requires **assets:read** ability.
       operationId: listLayerImageCategories
       security:
@@ -1093,14 +1104,17 @@ paths:
           schema:
             $ref: '#/components/schemas/LayerImageCategoryType'
         - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/assetSearchPage'
         - $ref: '#/components/parameters/assetPerPage'
       responses:
         '200':
-          description: Cursor-paginated list of layer image categories
+          description: |
+            A page of layer image categories. A listing returns cursor pagination (`meta.next_cursor`);
+            a search returns page numbers (`meta.current_page`, `meta.last_page`, `meta.total`).
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LayerImageCategoryCursorPage'
+                $ref: '#/components/schemas/LayerImageCategoryPage'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1189,7 +1203,18 @@ paths:
       tags: [Layer Images]
       summary: List layer images
       description: |
-        List your layer images, newest first.
+        List your layer images. Two ways to look one up:
+
+        - **Listing** (no `search`): newest first, read straight from the database, so an image
+          appears as soon as it is created. Filter with `category_id` and an exact `name`.
+          Cursor-paginated (`cursor`, `per_page`).
+        - **Search** (`search` given): matched by relevance through the search index, as in the
+          MCP tools -- partial words and small typos still match, so check the `name` of what
+          comes back. Filter with `category_id`. Page-numbered (`page`, `per_page`); `cursor` does
+          not apply. The index is updated in the background, so an image created a moment ago
+          may not be found by search yet -- use the exact `name` filter to find it immediately.
+
+        `name` and `search` cannot be combined.
         Requires **assets:read** ability.
       operationId: listLayerImages
       security:
@@ -1200,14 +1225,17 @@ paths:
         - $ref: '#/components/parameters/assetName'
         - $ref: '#/components/parameters/assetSearch'
         - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/assetSearchPage'
         - $ref: '#/components/parameters/assetPerPage'
       responses:
         '200':
-          description: Cursor-paginated list of layer images
+          description: |
+            A page of layer images. A listing returns cursor pagination (`meta.next_cursor`);
+            a search returns page numbers (`meta.current_page`, `meta.last_page`, `meta.total`).
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LayerImageCursorPage'
+                $ref: '#/components/schemas/LayerImagePage'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1337,8 +1365,21 @@ paths:
       tags: [Cliparts]
       summary: List clipart categories
       description: |
-        List your clipart categories, newest first. Categories of every type are listed, but
-        only `clipart` and `vector` categories can be filled through this API.
+        List your clipart categories. Two ways to look one up:
+
+        - **Listing** (no `search`): newest first, read straight from the database, so a category
+          appears as soon as it is created. Filter with `type` and `parent_id` and an exact `name`.
+          Cursor-paginated (`cursor`, `per_page`).
+        - **Search** (`search` given): matched by relevance through the search index, as in the
+          MCP tools -- partial words and small typos still match, so check the `name` of what
+          comes back. Filter with `type` and `parent_id`. Page-numbered (`page`, `per_page`); `cursor` does
+          not apply. The index is updated in the background, so a category created a moment ago
+          may not be found by search yet -- use the exact `name` filter to find it immediately.
+
+        `name` and `search` cannot be combined.
+
+        Categories of every type are listed, but only `clipart` and `vector` categories can be
+        filled through this API.
         Requires **assets:read** ability.
       operationId: listClipartCategories
       security:
@@ -1358,14 +1399,17 @@ paths:
           schema:
             type: integer
         - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/assetSearchPage'
         - $ref: '#/components/parameters/assetPerPage'
       responses:
         '200':
-          description: Cursor-paginated list of clipart categories
+          description: |
+            A page of clipart categories. A listing returns cursor pagination (`meta.next_cursor`);
+            a search returns page numbers (`meta.current_page`, `meta.last_page`, `meta.total`).
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ClipartCategoryCursorPage'
+                $ref: '#/components/schemas/ClipartCategoryPage'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1461,7 +1505,9 @@ paths:
       tags: [Cliparts]
       summary: List cliparts
       description: |
-        List your cliparts, newest first.
+        List your cliparts, newest first, cursor-paginated. Cliparts have no `search`: to find
+        cliparts by name, search the clipart categories, then list a category with
+        `category_id`, or look one up with the exact `name` filter. Sending `search` returns `422`.
         Requires **assets:read** ability.
       operationId: listCliparts
       security:
@@ -1470,7 +1516,6 @@ paths:
       parameters:
         - $ref: '#/components/parameters/assetCategoryId'
         - $ref: '#/components/parameters/assetName'
-        - $ref: '#/components/parameters/assetSearch'
         - $ref: '#/components/parameters/cursor'
         - $ref: '#/components/parameters/assetPerPage'
       responses:
@@ -2096,10 +2141,21 @@ components:
     assetSearch:
       name: search
       in: query
-      description: Only return items whose name contains this text (case-insensitive), like the search box in the portal's library pickers.
+      description: |
+        Search by name, ranked by relevance through the search index (partial words and small
+        typos match). Results are page-numbered. Cannot be combined with `name`.
       schema:
         type: string
+        maxLength: 255
       example: "SKU123"
+    assetSearchPage:
+      name: page
+      in: query
+      description: Page number, for `search` results only.
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
     assetPerPage:
       name: per_page
       in: query
@@ -3068,6 +3124,38 @@ components:
           nullable: true
           description: "Opaque cursor for the previous page. Use in the cursor parameter to go back."
 
+    AssetPageEnvelope:
+      type: object
+      description: |
+        Envelope of the asset library lists that support `search`: `data`, `links` and `meta`.
+        A listing fills the cursor fields of `meta` (as other cursor-paginated lists); a search
+        fills the page-number fields.
+      required: [links, meta]
+      properties:
+        links:
+          $ref: '#/components/schemas/CursorPageLinks'
+        meta:
+          type: object
+          properties:
+            per_page:
+              type: integer
+              description: "Number of items requested per page."
+            next_cursor:
+              type: [string, "null"]
+              description: "Listing only. Pass as `cursor` for the next page."
+            prev_cursor:
+              type: [string, "null"]
+              description: "Listing only."
+            current_page:
+              type: integer
+              description: "Search only."
+            last_page:
+              type: integer
+              description: "Search only."
+            total:
+              type: integer
+              description: "Search only. Number of matches."
+
     CursorPageEnvelope:
       type: object
       description: |
@@ -3896,11 +3984,11 @@ components:
               description: The `upload_url` stops working after this time.
               example: "2026-10-08T10:35:00Z"
 
-    LayerImageCategoryCursorPage:
+    LayerImageCategoryPage:
       type: object
-      description: "Cursor-paginated list of layer image categories."
+      description: "A page of layer image categories: cursor-paginated for a listing, page-numbered for a search."
       allOf:
-        - $ref: '#/components/schemas/CursorPageEnvelope'
+        - $ref: '#/components/schemas/AssetPageEnvelope'
         - type: object
           properties:
             data:
@@ -3908,11 +3996,11 @@ components:
               items:
                 $ref: '#/components/schemas/LayerImageCategory'
 
-    LayerImageCursorPage:
+    LayerImagePage:
       type: object
-      description: "Cursor-paginated list of layer images."
+      description: "A page of layer images: cursor-paginated for a listing, page-numbered for a search."
       allOf:
-        - $ref: '#/components/schemas/CursorPageEnvelope'
+        - $ref: '#/components/schemas/AssetPageEnvelope'
         - type: object
           properties:
             data:
@@ -3920,11 +4008,11 @@ components:
               items:
                 $ref: '#/components/schemas/LayerImage'
 
-    ClipartCategoryCursorPage:
+    ClipartCategoryPage:
       type: object
-      description: "Cursor-paginated list of clipart categories."
+      description: "A page of clipart categories: cursor-paginated for a listing, page-numbered for a search."
       allOf:
-        - $ref: '#/components/schemas/CursorPageEnvelope'
+        - $ref: '#/components/schemas/AssetPageEnvelope'
         - type: object
           properties:
             data:
