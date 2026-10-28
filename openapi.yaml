@@ -86,7 +86,7 @@ tags:
          (a few minutes).
       3. Call the create endpoint (e.g. `POST /layer-images`) with `{"upload_id": "..."}`.
          The uploaded file is checked at this point: it must be exactly the `filesize` you
-         declared, at most 20 MB, and a PNG, JPEG, GIF or WebP image -- judged from the file's
+         declared, at most 64 MB, and a PNG, JPEG, GIF or WebP image -- judged from the file's
          content, not its name -- otherwise the upload is removed and you get a `422`. If you call before your `PUT` has finished you also get a `422`; that one
          can simply be retried. Each `upload_id` can be used once.
 
@@ -118,7 +118,7 @@ tags:
       followed -- give the final, direct URL of the file -- and URLs that point to private or
       internal network addresses are refused.
 
-      Each file may be **at most 20 MB**, whichever way it is sent. Larger files are rejected with `422`.
+      Each file may be **at most 64 MB**, whichever way it is sent. Larger files are rejected with `422`.
 
       **Processing.** Raster images are processed in the background: the create call returns
       `201` with `status: processing`, and `url` / `thumbnail_url` are `null` until processing
@@ -1043,8 +1043,8 @@ paths:
                 filesize:
                   type: integer
                   minimum: 1
-                  maximum: 20971520
-                  description: Size of the file in bytes, at most 20 MB. The uploaded body must be exactly this size.
+                  maximum: 67108864
+                  description: Size of the file in bytes, at most 64 MB. The uploaded body must be exactly this size.
                   example: 8388608
                 filewidth:
                   type: integer
@@ -3586,7 +3586,7 @@ components:
         file:
           type: string
           format: binary
-          description: The file to upload. At most 20 MB. Only SVG/EPS and GPX files can be sent this way.
+          description: The file to upload. At most 64 MB. Only SVG/EPS and GPX files can be sent this way.
 
     AssetUploadIdUpload:
       type: object
@@ -3635,7 +3635,7 @@ components:
           format: uri
           description: |
             Public http(s) URL of the file. Teeinblue downloads it; the download is cut off at
-            20 MB. Signed cloud-storage URLs work.
+            64 MB. Signed cloud-storage URLs work.
           example: "https://storage.googleapis.com/my-bucket/SKU123/SKU123_BG.png?X-Goog-Signature=..."
 
     LayerImageCategoryType:
