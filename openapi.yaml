@@ -9,6 +9,11 @@ info:
     `ability:*` middleware). Asset library endpoints require **assets:read** or
     **assets:write** (see "Asset Libraries"). Replace server URLs with your real domains.
 
+    **Send `Accept: application/json` on every request.** Without it, errors are not
+    returned as JSON: a missing or invalid token is redirected to a login page (`302`)
+    instead of returning `401`, and a validation error is redirected instead of returning
+    `422`.
+
 servers:
   - url: https://api.teeinblue.com/openapi/v1
     description: Production
