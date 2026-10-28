@@ -1953,7 +1953,9 @@ paths:
       tags: [Library Images]
       summary: List library image categories
       description: |
-        List your library image categories, newest first.
+        List your library image categories, newest first, cursor-paginated. Categories are not
+        in the search index, so there is no `search`: look one up with the exact `name` filter.
+        Sending `search` returns `422`.
         Requires **assets:read** ability.
       operationId: listLibraryImageCategories
       security:
@@ -1966,7 +1968,6 @@ paths:
           schema:
             $ref: '#/components/schemas/LibraryImageType'
         - $ref: '#/components/parameters/assetName'
-        - $ref: '#/components/parameters/assetSearch'
         - $ref: '#/components/parameters/cursor'
         - $ref: '#/components/parameters/assetPerPage'
       responses:
