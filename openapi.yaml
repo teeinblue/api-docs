@@ -6,7 +6,13 @@ info:
     Public API for retrieving order data, and writing back to a small set of order fields
     and designs. Authenticated endpoints require a Bearer token with the ability each
     endpoint requires (see `x-required-ability` on each operation; enforced by the matching
-    `ability:*` middleware). Replace server URLs with your real domains.
+    `ability:*` middleware). Asset library endpoints require **assets:read** or
+    **assets:write** (see "Asset Libraries"). Replace server URLs with your real domains.
+
+    **Send `Accept: application/json` on every request.** Without it, errors are not
+    returned as JSON: a missing or invalid token is redirected to a login page (`302`)
+    instead of returning `401`, and a validation error is redirected instead of returning
+    `422`.
 
 servers:
   - url: https://api.teeinblue.com/openapi/v1
@@ -15,6 +21,36 @@ servers:
 tags:
   - name: Health
     description: Service status and version
+  - name: Rate Limiting
+    description: |
+      Every endpoint under `/openapi/v1` shares a single limit: **60 requests per minute**.
+
+      The limit is keyed to your account, not to the individual token -- if you use more than
+      one API token (e.g. one per script or environment), they all draw from the same 60/minute
+      budget, not 60 each.
+
+      **Response headers.** Every response includes:
+
+      | Header | Meaning |
+      |---|---|
+      | `X-RateLimit-Limit` | The limit for the current window (`60`) |
+      | `X-RateLimit-Remaining` | Requests left in the current window |
+
+      A response that hits the limit returns `429 Too Many Requests` with two more headers:
+
+      | Header | Meaning |
+      |---|---|
+      | `Retry-After` | Seconds to wait before your next request |
+      | `X-RateLimit-Reset` | Unix timestamp when the window resets |
+
+      ```json
+      {
+        "message": "Too Many Attempts."
+      }
+      ```
+
+      Back off until `Retry-After` has elapsed rather than retrying immediately -- retrying
+      before the window resets only spends more of a budget that is already at zero.
   - name: Orders
     description: Read access to orders, plus write access to Etsy order fields
   - name: Designs
@@ -26,6 +62,95 @@ tags:
   - name: Products
     description: Read-only access to products
 
+  - name: Asset Libraries
+    description: |
+      Upload and look up the reusable images in your Teeinblue libraries -- the same
+      libraries you manage in the portal. Use these endpoints to push material from your own
+      storage instead of uploading it by hand or through an AI agent.
+
+      | Library | Used in | Category type |
+      |---|---|---|
+      | Layer images | Image layers in artworks | `clipart`, `vector`, `gpx` |
+      | Cliparts | Clipart and vector pickers in artworks | `clipart`, `vector` |
+
+      **Abilities.** Read endpoints need **assets:read**; create and delete endpoints need **assets:write**.
+
+      **Sending a file.** How you send a file depends on its kind -- the same way the portal does:
+
+      | File | Send it as |
+      |---|---|
+      | Raster image (PNG, JPEG, GIF, WebP) -- layer images, cliparts | a pre-signed upload (`upload_id`), or a `url` |
+      | SVG / EPS -- layer images, cliparts | `multipart/form-data` with a `file` field, or a `url` |
+      | GPX -- layer images | `multipart/form-data` with a `file` field, or a `url` |
+
+      *Pre-signed upload (raster images).* The image bytes go straight to storage, not through this API:
+      1. `POST /uploads` with the file's `filename` (`.png`, `.jpg`, `.jpeg`, `.gif` or `.webp`)
+         and `filesize` (bytes). You get back an `upload_id`, an `upload_url` and the
+         `upload_headers` to send with it.
+      2. `PUT` the file bytes to `upload_url` with those headers before `expires_at`
+         (a few minutes).
+      3. Call the create endpoint (e.g. `POST /layer-images`) with `{"upload_id": "..."}`.
+         The uploaded file is checked at this point: it must be exactly the `filesize` you
+         declared, at most 64 MB, and a PNG, JPEG, GIF or WebP image -- judged from the file's
+         content, not its name -- otherwise the upload is removed and you get a `422`. If you call before your `PUT` has finished you also get a `422`; that one
+         can simply be retried. Each `upload_id` can be used once.
+
+      ```bash
+      # 1. Request a presigned upload
+      curl -X POST https://api.teeinblue.com/openapi/v1/uploads \
+        -H "Authorization: Bearer $TOKEN" \
+        -H "Content-Type: application/json" \
+        -d '{"filename": "SKU123_BG.png", "filesize": 8388608}'
+      # => { "upload_id": "...", "upload_url": "https://...",
+      #      "upload_headers": {"Content-Type": "image/png"},
+      #      "expires_at": "..." }
+
+      # 2. PUT the bytes straight to storage, sending the headers from upload_headers.
+      #    No Authorization header here -- the upload_url carries its own signature.
+      curl -X PUT "$UPLOAD_URL" \
+        -H "Content-Type: image/png" \
+        --data-binary @SKU123_BG.png
+
+      # 3. Create the item
+      curl -X POST https://api.teeinblue.com/openapi/v1/layer-images \
+        -H "Authorization: Bearer $TOKEN" \
+        -H "Content-Type: application/json" \
+        -d '{"upload_id": "..."}'
+      ```
+
+      *URL.* Send `application/json` with a `url` that Teeinblue downloads. The URL must be
+      publicly reachable over http(s) (a signed cloud-storage URL works). Redirects are not
+      followed -- give the final, direct URL of the file -- and URLs that point to private or
+      internal network addresses are refused.
+
+      Each file may be **at most 64 MB**, whichever way it is sent. Larger files are rejected with `422`.
+
+      **Processing.** Raster images are processed in the background: the create call returns
+      `201` with `status: processing`, and `url` / `thumbnail_url` are `null` until processing
+      finishes. Poll the item's `GET` endpoint until `status` is `ready`.
+      SVG/EPS and GPX files are processed during the request and come back `ready`.
+
+      **Duplicates.** By default every upload creates a new item, as in the portal. Pass
+      `on_duplicate` to make a re-run of your upload script safe:
+      - `create` (default) -- always create a new item.
+      - `skip` -- if an item with the same `name` already exists in the same category, return it
+        (`200`) without uploading.
+      - `replace` -- **cliparts only, raster images only**: replace the image of the existing
+        clipart with the same `name` in the same category, keeping its id (the portal's
+        "Replace items"). As in the portal, SVG/EPS cliparts cannot be replaced.
+
+      **Using an item in an artwork.** `url` is a storage key such as
+      `users/4965/image-layers/68c0006568e69_large.webp`. Put it in a layer exactly as returned --
+      do not prefix it with a domain. `thumbnail_url` is a full URL meant only for previews.
+
+      **Limits.** Uploads count towards the same daily limits as uploads made in the portal.
+      When a limit is reached the API returns `429` (see "TooManyRequests" below for the two
+      kinds of limit that can trigger it). These daily limits are separate from the
+      account-wide per-minute request limit described in "Rate Limiting".
+  - name: Layer Images
+    description: Images used by image layers in artworks, grouped in layer image categories.
+  - name: Cliparts
+    description: Cliparts and vectors used by clipart pickers in artworks, grouped in clipart categories.
 paths:
   /health:
     get:
@@ -1019,6 +1144,794 @@ paths:
               examples:
                 notFound:
                   value: { message: "Product not found" }
+  # ---------------------------------------------------------------------------
+  # Asset libraries: pre-signed uploads
+  # ---------------------------------------------------------------------------
+  /uploads:
+    post:
+      tags: [Asset Libraries]
+      summary: Create a pre-signed upload
+      description: |
+        Step 1 of uploading a raster image (see "Asset Libraries"). Returns an `upload_url` to
+        `PUT` the image bytes to, and an `upload_id` to pass to `POST /layer-images` or
+        `POST /cliparts` once the bytes are uploaded.
+
+        Accepted extensions: `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`. Send SVG/EPS and
+        GPX files as multipart instead.
+
+        Images larger than 128 megapixels are rejected when `filewidth` and `fileheight` are given.
+        Requires **assets:write** ability.
+      operationId: createUpload
+      security:
+        - bearerAuth: []
+      x-required-ability: assets:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [filename, filesize]
+              properties:
+                filename:
+                  type: string
+                  description: File name including its extension. Used as the item's default name.
+                  example: "SKU123_BG.png"
+                filesize:
+                  type: integer
+                  minimum: 1
+                  maximum: 67108864
+                  description: Size of the file in bytes, at most 64 MB. The uploaded body must be exactly this size.
+                  example: 8388608
+                filewidth:
+                  type: integer
+                  minimum: 1
+                  description: Image width in pixels. Optional; used to reject images over 128 megapixels before uploading.
+                  example: 4000
+                fileheight:
+                  type: integer
+                  minimum: 1
+                  description: Image height in pixels. Optional; used with `filewidth`.
+                  example: 4000
+      responses:
+        '201':
+          description: Upload created; `PUT` the file bytes to `upload_url` next.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresignedUpload'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  # ---------------------------------------------------------------------------
+  # Asset libraries: layer images
+  # ---------------------------------------------------------------------------
+  /layer-image-categories:
+    get:
+      tags: [Layer Images]
+      summary: List layer image categories
+      description: |
+        List your layer image categories. Two ways to look one up:
+
+        - **Listing** (no `search`): newest first, read straight from the database, so a category
+          appears as soon as it is created. Filter with `type` and an exact `name`.
+          Cursor-paginated (`cursor`, `per_page`).
+        - **Search** (`search` given): matched by relevance through the search index, as in the
+          MCP tools -- partial words and small typos still match, so check the `name` of what
+          comes back. Filter with `type`. Page-numbered (`page`, `per_page`); `cursor` does
+          not apply. The index is updated in the background, so a category created a moment ago
+          may not be found by search yet -- use the exact `name` filter to find it immediately.
+
+        `name` and `search` cannot be combined.
+        Requires **assets:read** ability.
+      operationId: listLayerImageCategories
+      security:
+        - bearerAuth: []
+      x-required-ability: assets:read
+      parameters:
+        - $ref: '#/components/parameters/assetName'
+        - $ref: '#/components/parameters/assetSearch'
+        - name: type
+          in: query
+          description: Only return categories of this type.
+          schema:
+            $ref: '#/components/schemas/LayerImageCategoryType'
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/assetSearchPage'
+        - $ref: '#/components/parameters/assetPerPage'
+      responses:
+        '200':
+          description: |
+            A page of layer image categories. A listing returns cursor pagination (`meta.next_cursor`);
+            a search returns page numbers (`meta.current_page`, `meta.last_page`, `meta.total`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LayerImageCategoryPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+    post:
+      tags: [Layer Images]
+      summary: Create a layer image category
+      description: |
+        Create a layer image category. The `type` decides which files the category accepts
+        and cannot be changed later.
+        Requires **assets:write** ability.
+      operationId: createLayerImageCategory
+      security:
+        - bearerAuth: []
+      x-required-ability: assets:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  maxLength: 255
+                  example: "SKU123"
+                description:
+                  type: string
+                  nullable: true
+                type:
+                  allOf:
+                    - $ref: '#/components/schemas/LayerImageCategoryType'
+                  default: clipart
+                on_duplicate:
+                  $ref: '#/components/schemas/CategoryOnDuplicate'
+      responses:
+        '200':
+          description: "`on_duplicate: skip` matched an existing category with the same name and type; it is returned unchanged."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LayerImageCategory'
+        '201':
+          description: Category created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LayerImageCategory'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+
+  /layer-image-categories/{id}:
+    get:
+      tags: [Layer Images]
+      summary: Get a layer image category
+      description: Requires **assets:read** ability.
+      operationId: getLayerImageCategory
+      security:
+        - bearerAuth: []
+      x-required-ability: assets:read
+      parameters:
+        - $ref: '#/components/parameters/assetId'
+      responses:
+        '200':
+          description: Category found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LayerImageCategory'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /layer-images:
+    get:
+      tags: [Layer Images]
+      summary: List layer images
+      description: |
+        List your layer images. Two ways to look one up:
+
+        - **Listing** (no `search`): newest first, read straight from the database, so an image
+          appears as soon as it is created. Filter with `category_id` and an exact `name`.
+          Cursor-paginated (`cursor`, `per_page`).
+        - **Search** (`search` given): matched by relevance through the search index, as in the
+          MCP tools -- partial words and small typos still match, so check the `name` of what
+          comes back. Filter with `category_id`. Page-numbered (`page`, `per_page`); `cursor` does
+          not apply. The index is updated in the background, so an image created a moment ago
+          may not be found by search yet -- use the exact `name` filter to find it immediately.
+
+        `name` and `search` cannot be combined.
+        Requires **assets:read** ability.
+      operationId: listLayerImages
+      security:
+        - bearerAuth: []
+      x-required-ability: assets:read
+      parameters:
+        - $ref: '#/components/parameters/assetCategoryId'
+        - $ref: '#/components/parameters/assetName'
+        - $ref: '#/components/parameters/assetSearch'
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/assetSearchPage'
+        - $ref: '#/components/parameters/assetPerPage'
+      responses:
+        '200':
+          description: |
+            A page of layer images. A listing returns cursor pagination (`meta.next_cursor`);
+            a search returns page numbers (`meta.current_page`, `meta.last_page`, `meta.total`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LayerImagePage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+    post:
+      tags: [Layer Images]
+      summary: Upload a layer image
+      description: |
+        Upload one layer image (see "Asset Libraries" for how to send each kind of file):
+        - Raster images (PNG, JPEG, GIF, WebP): `upload_id` from `POST /uploads`, or `url`.
+          Processed in the background -- returns `status: processing`.
+        - SVG/EPS and GPX: multipart `file`, or `url`.
+
+        The file must match the category's type:
+        - `clipart` / `vector` categories (or no category): raster images and SVG/EPS.
+        - `gpx` categories: GPX route files. A GPX upload is rendered with your Mapbox access token
+          (Settings > Maps), so it is rejected with `422` when no token is configured.
+
+        Requires **assets:write** ability.
+      operationId: createLayerImage
+      security:
+        - bearerAuth: []
+      x-required-ability: assets:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/LayerImageUploadFields'
+                - oneOf:
+                    - $ref: '#/components/schemas/AssetUploadIdUpload'
+                    - $ref: '#/components/schemas/AssetUrlUpload'
+          multipart/form-data:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/AssetFileUpload'
+                - $ref: '#/components/schemas/LayerImageUploadFields'
+              description: SVG/EPS and GPX files only. Raster images sent this way are rejected with `422` -- use `upload_id`.
+      responses:
+        '200':
+          description: "`on_duplicate: skip` matched an existing layer image; it is returned unchanged."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LayerImage'
+        '201':
+          description: Layer image created. Check `status` -- raster images start as `processing`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LayerImage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /layer-images/{id}:
+    get:
+      tags: [Layer Images]
+      summary: Get a layer image
+      description: |
+        Fetch one layer image. Poll this after an upload until `status` is `ready`.
+        Requires **assets:read** ability.
+      operationId: getLayerImage
+      security:
+        - bearerAuth: []
+      x-required-ability: assets:read
+      parameters:
+        - $ref: '#/components/parameters/assetId'
+      responses:
+        '200':
+          description: Layer image found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LayerImage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Layer Images]
+      summary: Delete a layer image
+      description: |
+        Delete a layer image. As in the portal, an image that is used in any artwork cannot be
+        deleted (`400`).
+        Requires **assets:write** ability.
+      operationId: deleteLayerImage
+      security:
+        - bearerAuth: []
+      x-required-ability: assets:write
+      parameters:
+        - $ref: '#/components/parameters/assetId'
+      responses:
+        '204':
+          description: Layer image deleted
+        '400':
+          description: The image is used in an artwork
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                inUse:
+                  value: { message: "This image has already been used." }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ---------------------------------------------------------------------------
+  # Asset libraries: cliparts
+  # ---------------------------------------------------------------------------
+  /clipart-categories:
+    get:
+      tags: [Cliparts]
+      summary: List clipart categories
+      description: |
+        List your clipart categories. Two ways to look one up:
+
+        - **Listing** (no `search`): newest first, read straight from the database, so a category
+          appears as soon as it is created. Filter with `type` and `parent_id` and an exact `name`.
+          Cursor-paginated (`cursor`, `per_page`).
+        - **Search** (`search` given): matched by relevance through the search index, as in the
+          MCP tools -- partial words and small typos still match, so check the `name` of what
+          comes back. Filter with `type` and `parent_id`. Page-numbered (`page`, `per_page`); `cursor` does
+          not apply. The index is updated in the background, so a category created a moment ago
+          may not be found by search yet -- use the exact `name` filter to find it immediately.
+
+        `name` and `search` cannot be combined.
+
+        Categories of every type are listed, but only `clipart` and `vector` categories can be
+        filled through this API.
+        Requires **assets:read** ability.
+      operationId: listClipartCategories
+      security:
+        - bearerAuth: []
+      x-required-ability: assets:read
+      parameters:
+        - $ref: '#/components/parameters/assetName'
+        - $ref: '#/components/parameters/assetSearch'
+        - name: type
+          in: query
+          description: Only return categories of this type.
+          schema:
+            $ref: '#/components/schemas/ClipartCategoryType'
+        - name: parent_id
+          in: query
+          description: Only return direct sub-categories of this category. Use `0` for top-level categories.
+          schema:
+            type: integer
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/assetSearchPage'
+        - $ref: '#/components/parameters/assetPerPage'
+      responses:
+        '200':
+          description: |
+            A page of clipart categories. A listing returns cursor pagination (`meta.next_cursor`);
+            a search returns page numbers (`meta.current_page`, `meta.last_page`, `meta.total`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClipartCategoryPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+    post:
+      tags: [Cliparts]
+      summary: Create a clipart category
+      description: |
+        Create a clipart or vector category, optionally nested under one of your categories.
+        The `type` cannot be changed later.
+        Requires **assets:write** ability.
+      operationId: createClipartCategory
+      security:
+        - bearerAuth: []
+      x-required-ability: assets:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, type]
+              properties:
+                name:
+                  type: string
+                  maxLength: 255
+                  example: "SKU123"
+                type:
+                  type: string
+                  enum: [clipart, vector]
+                description:
+                  type: string
+                  nullable: true
+                parent_id:
+                  type: integer
+                  nullable: true
+                  description: |
+                    Nest the new category under this one. It must be one of your categories and
+                    of the same type. Nesting is supported for `clipart` categories, up to 5 levels.
+                on_duplicate:
+                  $ref: '#/components/schemas/CategoryOnDuplicate'
+      responses:
+        '200':
+          description: "`on_duplicate: skip` matched an existing category with the same parent, name and type; it is returned unchanged."
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClipartCategory'
+        '201':
+          description: Category created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClipartCategory'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /clipart-categories/{id}:
+    get:
+      tags: [Cliparts]
+      summary: Get a clipart category
+      description: Requires **assets:read** ability.
+      operationId: getClipartCategory
+      security:
+        - bearerAuth: []
+      x-required-ability: assets:read
+      parameters:
+        - $ref: '#/components/parameters/assetId'
+      responses:
+        '200':
+          description: Category found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClipartCategory'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /cliparts:
+    get:
+      tags: [Cliparts]
+      summary: List cliparts
+      description: |
+        List your cliparts, newest first, cursor-paginated. Cliparts have no `search`: to find
+        cliparts by name, search the clipart categories, then list a category with
+        `category_id`, or look one up with the exact `name` filter. Sending `search` returns `422`.
+        Requires **assets:read** ability.
+      operationId: listCliparts
+      security:
+        - bearerAuth: []
+      x-required-ability: assets:read
+      parameters:
+        - $ref: '#/components/parameters/assetCategoryId'
+        - $ref: '#/components/parameters/assetName'
+        - $ref: '#/components/parameters/cursor'
+        - $ref: '#/components/parameters/assetPerPage'
+      responses:
+        '200':
+          description: Cursor-paginated list of cliparts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClipartCursorPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+    post:
+      tags: [Cliparts]
+      summary: Upload a clipart
+      description: |
+        Upload one clipart into a `clipart` or `vector` category (see "Asset Libraries" for how
+        to send each kind of file):
+        - Raster images (PNG, JPEG, GIF, WebP): `upload_id` from `POST /uploads`, or `url`.
+          Processed in the background -- returns `status: processing`.
+        - SVG/EPS: multipart `file`, or `url`.
+
+        A category holds at most 300 cliparts (your account may have a different limit), as in
+        the portal. Adding one to a full category is a `422` on `category_id`; replacing an
+        existing clipart (`on_duplicate: replace`) adds nothing, so it is allowed.
+        `on_duplicate: replace` works for raster images only -- replacing with an SVG/EPS file is
+        a `422` on `on_duplicate`.
+
+        Requires **assets:write** ability.
+      operationId: createClipart
+      security:
+        - bearerAuth: []
+      x-required-ability: assets:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/ClipartUploadFields'
+                - oneOf:
+                    - $ref: '#/components/schemas/AssetUploadIdUpload'
+                    - $ref: '#/components/schemas/AssetUrlUpload'
+          multipart/form-data:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/AssetFileUpload'
+                - $ref: '#/components/schemas/ClipartUploadFields'
+              description: SVG/EPS files only. Raster images sent this way are rejected with `422` -- use `upload_id`.
+      responses:
+        '200':
+          description: |
+            An existing clipart with the same name was matched:
+            - `on_duplicate: skip` -- returned unchanged.
+            - `on_duplicate: replace` -- its image is being replaced (`status: processing` for raster images).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Clipart'
+        '201':
+          description: Clipart created. Check `status` -- raster images start as `processing`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Clipart'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /cliparts/{id}:
+    get:
+      tags: [Cliparts]
+      summary: Get a clipart
+      description: |
+        Fetch one clipart. Poll this after an upload until `status` is `ready`.
+        Requires **assets:read** ability.
+      operationId: getClipart
+      security:
+        - bearerAuth: []
+      x-required-ability: assets:read
+      parameters:
+        - $ref: '#/components/parameters/assetId'
+      responses:
+        '200':
+          description: Clipart found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Clipart'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Cliparts]
+      summary: Delete a clipart
+      description: |
+        Delete a clipart from its category. Artworks that use the category no longer offer it.
+        Requires **assets:write** ability.
+      operationId: deleteClipart
+      security:
+        - bearerAuth: []
+      x-required-ability: assets:write
+      parameters:
+        - $ref: '#/components/parameters/assetId'
+      responses:
+        '204':
+          description: Clipart deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /clipart-category-bulk-uploads:
+    post:
+      tags: [Cliparts]
+      summary: Start a clipart bulk upload (zip)
+      description: |
+        Upload a whole folder of cliparts as one zip file. Folders in the zip become clipart
+        categories and the images inside them become cliparts -- the same as the portal's
+        bulk upload.
+
+        Steps:
+        1. Call this endpoint with the zip's `filename` and `filesize` (bytes). You get back an
+           `upload_url` and the `upload_headers` to send with it.
+        2. `PUT` the zip bytes to `upload_url` with those headers before `expires_at`.
+        3. Call `POST /clipart-category-bulk-uploads/{id}/extract`.
+        4. Poll `GET /clipart-category-bulk-uploads/{id}` until `status` is `done` or `error`.
+
+        The zip size limit and the number of bulk uploads you can have in progress at once
+        depend on your plan, as in the portal. The size is checked against `filesize` when the
+        upload is created, and against the actual zip again when it is extracted; a zip over
+        the limit ends with `status: error`.
+        Requires **assets:write** ability.
+      operationId: createClipartCategoryBulkUpload
+      security:
+        - bearerAuth: []
+      x-required-ability: assets:write
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [filename, filesize]
+              properties:
+                filename:
+                  type: string
+                  description: Name of the zip file. Used as the top category's name when the zip has no single top folder.
+                  example: "SKU123.zip"
+                filesize:
+                  type: integer
+                  description: Size of the zip file in bytes.
+                  example: 52428800
+                parent_category_id:
+                  type: integer
+                  nullable: true
+                  description: Create the categories under this clipart category. It must be one of your `clipart` categories.
+                ignore_parent:
+                  type: boolean
+                  default: true
+                  description: |
+                    - `true`: skip the zip's top folder; each folder inside it becomes a category
+                      directly under `parent_category_id` (or at the top level).
+                    - `false`: keep the top folder as a category. If the zip has no single top
+                      folder, the zip's file name is used as the top category.
+      responses:
+        '201':
+          description: Bulk upload created; upload the zip to `upload_url` next.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClipartCategoryBulkUploadStart'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '413':
+          description: The zip is larger than your plan allows
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /clipart-category-bulk-uploads/{id}:
+    get:
+      tags: [Cliparts]
+      summary: Get a clipart bulk upload
+      description: |
+        Check the progress of a bulk upload. When `status` is `done`, `clipart_category_id`
+        is the category the cliparts were created in.
+        Requires **assets:read** ability.
+      operationId: getClipartCategoryBulkUpload
+      security:
+        - bearerAuth: []
+      x-required-ability: assets:read
+      parameters:
+        - $ref: '#/components/parameters/assetId'
+      responses:
+        '200':
+          description: Bulk upload found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClipartCategoryBulkUpload'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /clipart-category-bulk-uploads/{id}/extract:
+    post:
+      tags: [Cliparts]
+      summary: Extract an uploaded zip
+      description: |
+        Start creating categories and cliparts from the uploaded zip. Call this once the `PUT`
+        to `upload_url` has finished. Unextracted uploads are picked up automatically after
+        15 minutes.
+        Requires **assets:write** ability.
+      operationId: extractClipartCategoryBulkUpload
+      security:
+        - bearerAuth: []
+      x-required-ability: assets:write
+      parameters:
+        - $ref: '#/components/parameters/assetId'
+      responses:
+        '202':
+          description: Extraction started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClipartCategoryBulkUpload'
+        '400':
+          description: The bulk upload has already been extracted or has failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                invalidStatus:
+                  value: { message: "Can not start extracting bulk upload with invalid status" }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: The zip has not been uploaded to `upload_url` yet. Retry once the `PUT` has finished.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+              examples:
+                notUploaded:
+                  value:
+                    message: "The ZIP has not been uploaded yet. PUT it to the upload_url first."
+                    errors:
+                      id: ["The ZIP has not been uploaded yet. PUT it to the upload_url first."]
+
+  # ---------------------------------------------------------------------------
 components:
   securitySchemes:
     bearerAuth:
@@ -1338,6 +2251,58 @@ components:
         items: { type: integer }
       example: [321]
 
+    assetId:
+      name: id
+      in: path
+      required: true
+      description: ID of the item.
+      schema:
+        type: integer
+      example: 12345
+    assetCategoryId:
+      name: category_id
+      in: query
+      description: Only return items in this category.
+      schema:
+        type: integer
+      example: 321
+    assetName:
+      name: name
+      in: query
+      description: |
+        Only return items whose name is exactly this value (case-sensitive). Use it to check
+        whether an item already exists, e.g. `SKU123_BG`.
+      schema:
+        type: string
+      example: "SKU123_BG"
+    assetSearch:
+      name: search
+      in: query
+      description: |
+        Search by name, ranked by relevance through the search index (partial words and small
+        typos match). Results are page-numbered. Cannot be combined with `name`.
+      schema:
+        type: string
+        maxLength: 255
+      example: "SKU123"
+    assetSearchPage:
+      name: page
+      in: query
+      description: Page number, for `search` results only.
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    assetPerPage:
+      name: per_page
+      in: query
+      description: Number of items to return per page.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 25
+      example: 25
   responses:
     Unauthorized:
       description: Missing or invalid authentication
@@ -1357,6 +2322,15 @@ components:
           examples:
             forbidden:
               value: { message: "Forbidden." }
+    NotFound:
+      description: The item does not exist or does not belong to you
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            notFound:
+              value: { message: "Not found." }
     UnprocessableEntity:
       description: Request parameters failed validation (e.g. an unparseable start_date/end_date)
       content:
@@ -1369,7 +2343,53 @@ components:
                 message: "The end date field must be a valid date."
                 errors:
                   end_date: ["The end date field must be a valid date."]
-
+            fileTooLarge:
+              value:
+                message: "The file field must not be greater than 20480 kilobytes."
+                errors:
+                  file: ["The file field must not be greater than 20480 kilobytes."]
+            rasterAsMultipart:
+              value:
+                message: "Raster images must be uploaded with upload_id or url."
+                errors:
+                  file: ["Raster images must be uploaded with upload_id or url."]
+            categoryNotFound:
+              value:
+                message: "The selected category id is invalid."
+                errors:
+                  category_id: ["The selected category id is invalid."]
+    TooManyRequests:
+      description: |
+        A rate limit was reached: either the daily limit for this kind of item (shared with
+        uploads made in the portal, see "Asset Libraries") or the per-minute API request limit
+        that applies account-wide (see "Rate Limiting"). `Retry-After` says how many seconds to
+        wait; the `X-RateLimit-*` headers are only populated for the per-minute limit.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds to wait before retrying.
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+          description: Per-minute limit only. The limit for the current window.
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+          description: Per-minute limit only. Always `0` on this response.
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+          description: Per-minute limit only. Unix timestamp when the window resets.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            dailyLimit:
+              value: { message: "Reach the limit 1000 records in 1 day. Wait until 2026-10-09 08:00:00 to try again or contact support to increase." }
+            perMinuteLimit:
+              value: { message: "Too Many Attempts." }
   schemas:
     Health:
       type: object
@@ -2241,6 +3261,38 @@ components:
           nullable: true
           description: "Opaque cursor for the previous page. Use in the cursor parameter to go back."
 
+    AssetPageEnvelope:
+      type: object
+      description: |
+        Envelope of the asset library lists that support `search`: `data`, `links` and `meta`.
+        A listing fills the cursor fields of `meta` (as other cursor-paginated lists); a search
+        fills the page-number fields.
+      required: [links, meta]
+      properties:
+        links:
+          $ref: '#/components/schemas/CursorPageLinks'
+        meta:
+          type: object
+          properties:
+            per_page:
+              type: integer
+              description: "Number of items requested per page."
+            next_cursor:
+              type: [string, "null"]
+              description: "Listing only. Pass as `cursor` for the next page."
+            prev_cursor:
+              type: [string, "null"]
+              description: "Listing only."
+            current_page:
+              type: integer
+              description: "Search only."
+            last_page:
+              type: integer
+              description: "Search only."
+            total:
+              type: integer
+              description: "Search only. Number of matches."
+
     CursorPageEnvelope:
       type: object
       description: |
@@ -2812,3 +3864,398 @@ components:
           type: string
           description: "Size of the variant"
           example: "Large"
+
+    # -------------------------------------------------------------------------
+    # Asset libraries
+    # -------------------------------------------------------------------------
+    AssetStatus:
+      type: string
+      enum: [processing, ready]
+      description: |
+        - `processing`: the file is still being processed in the background; `url` and
+          `thumbnail_url` are `null`.
+        - `ready`: the item can be used.
+
+    AssetOnDuplicate:
+      type: string
+      enum: [create, skip]
+      default: create
+      description: |
+        What to do when an item with the same `name` already exists in the same category:
+        - `create` (default): create a new item anyway, as the portal does.
+        - `skip`: return the existing item (`200`) without uploading.
+
+    CategoryOnDuplicate:
+      type: string
+      enum: [create, skip]
+      default: create
+      description: |
+        What to do when a category with the same name (and the same parent and type, where those apply) already exists:
+        - `create` (default): create a new category anyway, as the portal does.
+        - `skip`: return the existing category (`200`).
+
+    AssetFileUpload:
+      type: object
+      title: File
+      required: [file]
+      properties:
+        file:
+          type: string
+          format: binary
+          description: The file to upload. At most 64 MB. Only SVG/EPS and GPX files can be sent this way.
+
+    AssetUploadIdUpload:
+      type: object
+      title: Pre-signed upload
+      required: [upload_id]
+      properties:
+        upload_id:
+          type: string
+          format: uuid
+          description: |
+            The `upload_id` from `POST /uploads`, after the file bytes were `PUT` to its
+            `upload_url`. Raster images only. Can be used once.
+          example: "9b2f6c1e-3d4a-4f7b-9c1d-2e5a6b7c8d9e"
+
+    PresignedUpload:
+      type: object
+      properties:
+        upload_id:
+          type: string
+          format: uuid
+          description: Pass this to the create endpoint once the bytes are uploaded.
+          example: "9b2f6c1e-3d4a-4f7b-9c1d-2e5a6b7c8d9e"
+        upload_url:
+          type: string
+          format: uri
+          description: Pre-signed URL to `PUT` the file bytes to.
+        upload_headers:
+          type: object
+          additionalProperties:
+            type: string
+          description: Headers to send with the `PUT`, exactly as given.
+          example: { "Content-Type": "image/png" }
+        expires_at:
+          type: string
+          format: date-time
+          description: The `upload_url` stops working after this time.
+          example: "2026-10-08T10:35:00Z"
+
+    AssetUrlUpload:
+      type: object
+      title: URL
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: |
+            Public http(s) URL of the file. Teeinblue downloads it; the download is cut off at
+            64 MB. Signed cloud-storage URLs work.
+          example: "https://storage.googleapis.com/my-bucket/SKU123/SKU123_BG.png?X-Goog-Signature=..."
+
+    LayerImageCategoryType:
+      type: string
+      enum: [clipart, vector, gpx]
+      description: |
+        - `clipart` / `vector`: raster images and SVG/EPS files.
+        - `gpx`: GPX route files, used by route map layers.
+
+    LayerImageCategory:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 321
+        name:
+          type: string
+          example: "SKU123"
+        description:
+          type: string
+          nullable: true
+        type:
+          $ref: '#/components/schemas/LayerImageCategoryType'
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-10-08T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-10-08T10:30:00Z"
+
+    LayerImageUploadFields:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 255
+          description: Name of the layer image. Defaults to the file name without its extension.
+          example: "SKU123_BG"
+        category_id:
+          type: integer
+          nullable: true
+          description: One of your layer image categories. The file must match the category's type.
+          example: 321
+        artwork_width:
+          type: integer
+          minimum: 1
+          description: |
+            Raster images only. Width in pixels of the artwork the image is meant for; the
+            preview version of the image (`url`) is sized for it. Defaults to your account's
+            artwork width setting. The original file is always kept at full size.
+          example: 600
+        on_duplicate:
+          $ref: '#/components/schemas/AssetOnDuplicate'
+
+    LayerImage:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 12345
+        name:
+          type: string
+          example: "SKU123_BG"
+        category_id:
+          type: integer
+          nullable: true
+          example: 321
+        status:
+          $ref: '#/components/schemas/AssetStatus'
+        url:
+          type: string
+          nullable: true
+          description: Storage key to put in an artwork layer, exactly as returned. `null` while processing.
+          example: "users/4965/image-layers/68c0006568e69_large.webp"
+        thumbnail_url:
+          type: string
+          format: uri
+          nullable: true
+          description: Full URL of a small preview. `null` while processing.
+          example: "https://cdn.teeinblue.com/users/4965/image-layers/68c0006568e69_thumb.webp"
+        width:
+          type: integer
+          nullable: true
+          description: Width of the original file in pixels. `null` while processing.
+          example: 4000
+        height:
+          type: integer
+          nullable: true
+          description: Height of the original file in pixels. `null` while processing.
+          example: 4000
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-10-08T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-10-08T10:30:05Z"
+
+    ClipartCategoryType:
+      type: string
+      enum: [clipart, vector, additional_option, font_category, map, color_category, font]
+      description: |
+        What the category holds. Only `clipart` and `vector` categories can be created and
+        filled through this API; the other types are listed so you can see your whole library.
+
+    ClipartCategory:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 654
+        name:
+          type: string
+          example: "SKU123"
+        description:
+          type: string
+          nullable: true
+        type:
+          $ref: '#/components/schemas/ClipartCategoryType'
+        parent_id:
+          type: integer
+          nullable: true
+          description: The category this one is nested under, or `null` for a top-level category.
+          example: null
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-10-08T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-10-08T10:30:00Z"
+
+    ClipartUploadFields:
+      type: object
+      required: [category_id]
+      properties:
+        category_id:
+          type: integer
+          description: One of your `clipart` or `vector` categories.
+          example: 654
+        name:
+          type: string
+          maxLength: 191
+          description: Name of the clipart. Defaults to the file name without its extension.
+          example: "SKU123_clipart_01"
+        on_duplicate:
+          type: string
+          enum: [create, skip, replace]
+          default: create
+          description: |
+            What to do when a clipart with the same `name` already exists in the category:
+            - `create` (default): create a new clipart anyway.
+            - `skip`: return the existing clipart (`200`) without uploading.
+            - `replace`: replace the existing clipart's image, keeping its id (`200`).
+        keep_thumbnail:
+          type: boolean
+          default: false
+          description: 'With `on_duplicate: replace`, keep the existing clipart''s thumbnail (the portal''s "Replace items, keep thumbnails").'
+
+    Clipart:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 98765
+        name:
+          type: string
+          example: "SKU123_clipart_01"
+        category_id:
+          type: integer
+          example: 654
+        status:
+          $ref: '#/components/schemas/AssetStatus'
+        url:
+          type: string
+          nullable: true
+          description: Storage key of the clipart image. `null` while processing.
+          example: "users/4965/cliparts/654/68c0006568e69_large.webp"
+        thumbnail_url:
+          type: string
+          format: uri
+          nullable: true
+          description: Full URL of the clipart's thumbnail. `null` while processing.
+          example: "https://cdn.teeinblue.com/users/4965/cliparts/654/68c0006568e69_thumb.webp"
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-10-08T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-10-08T10:30:05Z"
+
+    ClipartCategoryBulkUploadStatus:
+      type: string
+      enum: [created, uploading, extracting, done, error, delayed]
+      description: |
+        - `uploading`: waiting for the zip to be uploaded to `upload_url`.
+        - `extracting`: categories and cliparts are being created.
+        - `delayed`: too many of your bulk uploads are extracting at once; this one will start automatically.
+        - `done`: finished; see `clipart_category_id`.
+        - `error`: failed; see `logs`.
+
+    ClipartCategoryBulkUpload:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 77
+        name:
+          type: string
+          description: The zip's file name without its extension.
+          example: "SKU123"
+        status:
+          $ref: '#/components/schemas/ClipartCategoryBulkUploadStatus'
+        clipart_category_id:
+          type: integer
+          nullable: true
+          description: The category the cliparts were created in. Set when `status` is `done`.
+          example: 654
+        logs:
+          type: array
+          items:
+            type: string
+          description: Progress messages, oldest first. Includes the reason when `status` is `error`.
+          example: ["2026-10-08 10:30:00: Created", "2026-10-08 10:31:12: Extracting"]
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-10-08T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-10-08T10:31:12Z"
+
+    ClipartCategoryBulkUploadStart:
+      allOf:
+        - $ref: '#/components/schemas/ClipartCategoryBulkUpload'
+        - type: object
+          properties:
+            upload_url:
+              type: string
+              format: uri
+              description: Pre-signed URL to `PUT` the zip bytes to.
+            upload_headers:
+              type: object
+              additionalProperties:
+                type: string
+              description: Headers to send with the `PUT`, exactly as given.
+              example: { "Content-Type": "application/zip" }
+            expires_at:
+              type: string
+              format: date-time
+              description: The `upload_url` stops working after this time.
+              example: "2026-10-08T10:35:00Z"
+
+    LayerImageCategoryPage:
+      type: object
+      description: "A page of layer image categories: cursor-paginated for a listing, page-numbered for a search."
+      allOf:
+        - $ref: '#/components/schemas/AssetPageEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/LayerImageCategory'
+
+    LayerImagePage:
+      type: object
+      description: "A page of layer images: cursor-paginated for a listing, page-numbered for a search."
+      allOf:
+        - $ref: '#/components/schemas/AssetPageEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/LayerImage'
+
+    ClipartCategoryPage:
+      type: object
+      description: "A page of clipart categories: cursor-paginated for a listing, page-numbered for a search."
+      allOf:
+        - $ref: '#/components/schemas/AssetPageEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ClipartCategory'
+
+    ClipartCursorPage:
+      type: object
+      description: "Cursor-paginated list of cliparts."
+      allOf:
+        - $ref: '#/components/schemas/CursorPageEnvelope'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/Clipart'
