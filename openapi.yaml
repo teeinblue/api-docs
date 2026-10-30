@@ -798,6 +798,72 @@ paths:
                 notFound:
                   value: { message: "Product base campaign not found" }
 
+    patch:
+      tags: [Campaigns]
+      summary: Update a product base campaign
+      description: |
+        Partially update a product base campaign by its ID. Only the fields included in the request body are updated;
+        omitted fields keep their current value. A field sent as `null` (or an empty string) is ignored, so a field
+        cannot be cleared through this endpoint. Unknown fields are ignored, and a request with no updatable field
+        is rejected with `422`.
+
+        The change is made in Teeinblue only: a campaign already published to a store keeps its previous state there
+        until it is synced again.
+        Requires **campaigns:write** ability.
+      operationId: updateProductBaseCampaign
+      security:
+        - bearerAuth: []
+      x-required-ability: campaigns:write
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Product base campaign ID (e.g., `1245`)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProductBaseCampaignRequest'
+            examples:
+              markDone:
+                summary: Mark the campaign as done with an internal tag
+                value: { internal_tags: "DONE" }
+      responses:
+        '200':
+          description: Product base campaign updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductBaseCampaign'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Product base campaign not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notFound:
+                  value: { message: "No query results for model." }
+        '422':
+          description: Request body failed validation, or contained no updatable field
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+              examples:
+                empty:
+                  value:
+                    message: "At least one updatable field with a non-null value is required."
+                    errors:
+                      body: ["At least one updatable field with a non-null value is required."]
+
   /campaigns/platform-base:
     get:
       tags: [Campaigns]
@@ -866,6 +932,72 @@ paths:
               examples:
                 notFound:
                   value: { message: "Platform base not found" }
+
+    patch:
+      tags: [Campaigns]
+      summary: Update a platform base campaign
+      description: |
+        Partially update a platform base campaign by its ID. Only the fields included in the request body are updated;
+        omitted fields keep their current value. A field sent as `null` (or an empty string) is ignored, so a field
+        cannot be cleared through this endpoint. Unknown fields are ignored, and a request with no updatable field
+        is rejected with `422`.
+
+        The change is made in Teeinblue only: a campaign already published to a store keeps its previous state there
+        until it is synced again.
+        Requires **campaigns:write** ability.
+      operationId: updatePlatformBaseCampaign
+      security:
+        - bearerAuth: []
+      x-required-ability: campaigns:write
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Platform base campaign ID (e.g., `1245`)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePlatformBaseCampaignRequest'
+            examples:
+              markDone:
+                summary: Mark the campaign as done with an internal tag
+                value: { internal_tags: "DONE" }
+      responses:
+        '200':
+          description: Platform base campaign updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformCampaign'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Platform base campaign not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notFound:
+                  value: { message: "No query results for model." }
+        '422':
+          description: Request body failed validation, or contained no updatable field
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+              examples:
+                empty:
+                  value:
+                    message: "At least one updatable field with a non-null value is required."
+                    errors:
+                      body: ["At least one updatable field with a non-null value is required."]
 
   /customizations:
     get:
@@ -3262,6 +3394,11 @@ components:
           type: string
           description: "Name of the campaign"
           example: "My Campaign"
+        internal_tags:
+          type: string
+          nullable: true
+          description: "Internal-only tags, not pushed to the storefront"
+          example: "DONE"
         preview_url:
           type: string
           description: "Preview URL of the campaign"
@@ -3440,6 +3577,62 @@ components:
           description: "Preview thumbnail of the mockup"
           example: "https://cdn.teeinblue.com/examples/platform-mockups/thumbnail.webp"
 
+    UpdateProductBaseCampaignRequest:
+      type: object
+      description: |
+        Request body for partially updating a product base campaign. At least one field with a non-null value is required.
+      properties:
+        name:
+          type: string
+          maxLength: 255
+          description: "Campaign name"
+          example: "Spring Collection - DONE"
+        product_tags:
+          type: string
+          description: "Comma-separated storefront tags"
+          example: "spring,sale"
+        vendor:
+          type: string
+          maxLength: 255
+          description: "Vendor name"
+          example: "Acme"
+        product_type:
+          type: string
+          maxLength: 255
+          description: "Product type"
+          example: "T-Shirt"
+        product_display_type:
+          type: string
+          maxLength: 255
+          description: "Display type"
+          example: "grid"
+        label_available_product:
+          type: string
+          maxLength: 255
+          description: "Available-product picker label"
+          example: "Choose a product"
+        internal_tags:
+          type: string
+          maxLength: 255
+          description: "Internal-only tags, filterable in the admin campaign list and not pushed to the storefront"
+          example: "DONE"
+
+    UpdatePlatformBaseCampaignRequest:
+      type: object
+      description: |
+        Request body for partially updating a platform base campaign. At least one field with a non-null value is required.
+      properties:
+        name:
+          type: string
+          maxLength: 255
+          description: "Campaign name"
+          example: "Spring Collection - DONE"
+        internal_tags:
+          type: string
+          maxLength: 255
+          description: "Internal-only tags, filterable in the admin campaign list and not pushed to the storefront"
+          example: "DONE"
+
     ProductBaseCampaign:
       type: object
       description: |
@@ -3453,6 +3646,36 @@ components:
           type: string
           description: "Name of the product base campaign"
           example: "My Product Base Campaign"
+        product_tags:
+          type: string
+          nullable: true
+          description: "Comma-separated storefront tags"
+          example: "spring,sale"
+        vendor:
+          type: string
+          nullable: true
+          description: "Vendor name"
+          example: "Acme"
+        product_type:
+          type: string
+          nullable: true
+          description: "Product type"
+          example: "T-Shirt"
+        product_display_type:
+          type: string
+          nullable: true
+          description: "Display type"
+          example: "grid"
+        label_available_product:
+          type: string
+          nullable: true
+          description: "Available-product picker label"
+          example: "Choose a product"
+        internal_tags:
+          type: string
+          nullable: true
+          description: "Internal-only tags, not pushed to the storefront"
+          example: "DONE"
         status:
           type: number
           description: |
