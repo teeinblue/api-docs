@@ -81,20 +81,26 @@ tags:
       | File | Send it as |
       |---|---|
       | Raster image (PNG, JPEG, GIF, WebP) -- layer images, cliparts, library images | a pre-signed upload (`upload_id`), or a `url` |
+      | SVG -- library images | a pre-signed upload (`upload_id`), or a `url` |
       | SVG / EPS -- layer images, cliparts | `multipart/form-data` with a `file` field, or a `url` |
       | GPX -- layer images | `multipart/form-data` with a `file` field, or a `url` |
 
-      *Pre-signed upload (raster images).* The image bytes go straight to storage, not through this API:
-      1. `POST /uploads` with the file's `filename` (`.png`, `.jpg`, `.jpeg`, `.gif` or `.webp`)
+      *Pre-signed upload (raster images, and SVGs for library images).* The image bytes go
+      straight to storage, not through this API:
+      1. `POST /uploads` with the file's `filename` (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`
+         or `.svg`)
          and `filesize` (bytes). You get back an `upload_id`, an `upload_url` and the
          `upload_headers` to send with it.
       2. `PUT` the file bytes to `upload_url` with those headers before `expires_at`
          (a few minutes).
       3. Call the create endpoint (e.g. `POST /layer-images`) with `{"upload_id": "..."}`.
          The uploaded file is checked at this point: it must be exactly the `filesize` you
-         declared, at most 64 MB, and a PNG, JPEG, GIF or WebP image -- judged from the file's
-         content, not its name -- otherwise the upload is removed and you get a `422`. If you call before your `PUT` has finished you also get a `422`; that one
-         can simply be retried. Each `upload_id` can be used once.
+         declared, at most 64 MB, and an image the endpoint takes -- judged from the file's
+         content, not its name -- otherwise the upload is removed and you get a `422`. Layer
+         images and cliparts take a PNG, JPEG, GIF or WebP this way (send their SVGs as
+         multipart); library images also take an SVG. If you call before your `PUT` has
+         finished you also get a `422`; that one can simply be retried. Each `upload_id` can be
+         used once.
 
       ```bash
       # 1. Request a presigned upload
@@ -126,10 +132,16 @@ tags:
 
       Each file may be **at most 64 MB**, whichever way it is sent. Larger files are rejected with `422`.
 
+      A raster layer image or library image may be **at most 128 megapixels** (width x height),
+      read from the file's header whichever way it is sent. A larger image, or one whose size
+      cannot be read (a corrupt or truncated file), is refused with `422` and the upload is
+      removed. SVGs have no pixel limit.
+
       **Processing.** Raster images are processed in the background: the create call returns
       `201` with `status: processing`, and `url` / `thumbnail_url` are `null` until processing
       finishes. Poll the item's `GET` endpoint until `status` is `ready`.
-      SVG/EPS and GPX files are processed during the request and come back `ready`.
+      SVG/EPS and GPX files are processed during the request and come back `ready`, as do
+      library image SVGs.
 
       **Duplicates.** By default every upload creates a new item, as in the portal. Pass
       `on_duplicate` to make a re-run of your upload script safe:
@@ -162,8 +174,15 @@ tags:
       - `mask` -- a cut-out shape, used as the mask of an artwork or mockup layer.
       - `image` -- any other picture: backgrounds, thumbnails, reference images, map markers.
 
-      A category holds one type only. Library images are raster images (PNG, JPEG, GIF, WebP),
-      sent as a pre-signed upload (`upload_id`) or a `url` -- not as multipart.
+      A category holds one type only. Library images are sent as a pre-signed upload
+      (`upload_id`) or a `url` -- not as multipart -- in the formats the portal's library takes:
+
+      | Type | Formats |
+      |---|---|
+      | `image` | PNG, JPEG, GIF, WebP, SVG |
+      | `mask` | PNG, WebP, SVG -- a mask needs transparency, so JPEG and GIF are refused |
+
+      An SVG must have a `viewBox`; it is sanitized, kept as a vector and ready at once.
 paths:
   /health:
     get:
@@ -1165,14 +1184,17 @@ paths:
       tags: [Asset Libraries]
       summary: Create a pre-signed upload
       description: |
-        Step 1 of uploading a raster image (see "Asset Libraries"). Returns an `upload_url` to
+        Step 1 of uploading an image (see "Asset Libraries"). Returns an `upload_url` to
         `PUT` the image bytes to, and an `upload_id` to pass to `POST /layer-images`,
         `POST /cliparts` or `POST /library-images` once the bytes are uploaded.
 
-        Accepted extensions: `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`. Send SVG/EPS and
-        GPX files as multipart instead.
+        Accepted extensions: `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.svg`. An `.svg` upload
+        is for `POST /library-images` only: layer images and cliparts take their SVGs as
+        multipart, as the portal sends them, and refuse an SVG `upload_id` with `422`. Send
+        EPS and GPX files as multipart.
 
-        Images larger than 128 megapixels are rejected when `filewidth` and `fileheight` are given.
+        Images larger than 128 megapixels are rejected here when `filewidth` and `fileheight`
+        are given; the create endpoint checks the size again from the file itself.
         Requires **assets:write** ability.
       operationId: createUpload
       security:
@@ -1228,18 +1250,9 @@ paths:
       tags: [Layer Images]
       summary: List layer image categories
       description: |
-        List your layer image categories. Two ways to look one up:
-
-        - **Listing** (no `search`): newest first, read straight from the database, so a category
-          appears as soon as it is created. Filter with `type` and an exact `name`.
-          Cursor-paginated (`cursor`, `per_page`).
-        - **Search** (`search` given): matched by relevance through the search index, as in the
-          MCP tools -- partial words and small typos still match, so check the `name` of what
-          comes back. Filter with `type`. Page-numbered (`page`, `per_page`); `cursor` does
-          not apply. The index is updated in the background, so a category created a moment ago
-          may not be found by search yet -- use the exact `name` filter to find it immediately.
-
-        `name` and `search` cannot be combined.
+        List your layer image categories, newest first, cursor-paginated. As in the portal,
+        which lists a type's categories all at once, there is no `search`: look one up with the
+        exact `name` filter. Sending `search` returns `422`.
         Requires **assets:read** ability.
       operationId: listLayerImageCategories
       security:
@@ -1247,24 +1260,20 @@ paths:
       x-required-ability: assets:read
       parameters:
         - $ref: '#/components/parameters/assetName'
-        - $ref: '#/components/parameters/assetSearch'
         - name: type
           in: query
           description: Only return categories of this type.
           schema:
             $ref: '#/components/schemas/LayerImageCategoryType'
         - $ref: '#/components/parameters/cursor'
-        - $ref: '#/components/parameters/assetSearchPage'
         - $ref: '#/components/parameters/assetPerPage'
       responses:
         '200':
-          description: |
-            A page of layer image categories. A listing returns cursor pagination (`meta.next_cursor`);
-            a search returns page numbers (`meta.current_page`, `meta.last_page`, `meta.total`).
+          description: Cursor-paginated list of layer image categories
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LayerImageCategoryPage'
+                $ref: '#/components/schemas/LayerImageCategoryCursorPage'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1398,8 +1407,9 @@ paths:
       description: |
         Upload one layer image (see "Asset Libraries" for how to send each kind of file):
         - Raster images (PNG, JPEG, GIF, WebP): `upload_id` from `POST /uploads`, or `url`.
-          Processed in the background -- returns `status: processing`.
-        - SVG/EPS and GPX: multipart `file`, or `url`.
+          Processed in the background -- returns `status: processing`. At most 128 megapixels;
+          a larger image, or one whose size cannot be read, is a `422` and the upload is removed.
+        - SVG/EPS and GPX: multipart `file`, or `url`. An SVG `upload_id` is a `422`.
 
         The file must match the category's type:
         - `clipart` / `vector` categories (or no category): raster images and SVG/EPS.
@@ -1601,6 +1611,8 @@ paths:
                   description: |
                     Nest the new category under this one. It must be one of your categories and
                     of the same type. Nesting is supported for `clipart` categories, up to 5 levels.
+                clipart_max_width:
+                  $ref: '#/components/schemas/ClipartPreviewSize'
                 on_duplicate:
                   $ref: '#/components/schemas/CategoryOnDuplicate'
       responses:
@@ -1689,7 +1701,7 @@ paths:
         to send each kind of file):
         - Raster images (PNG, JPEG, GIF, WebP): `upload_id` from `POST /uploads`, or `url`.
           Processed in the background -- returns `status: processing`.
-        - SVG/EPS: multipart `file`, or `url`.
+        - SVG/EPS: multipart `file`, or `url`. An SVG `upload_id` is a `422`.
 
         A category holds at most 300 cliparts (your account may have a different limit), as in
         the portal. Adding one to a full category is a `422` on `category_id`; replacing an
@@ -1953,8 +1965,9 @@ paths:
       tags: [Library Images]
       summary: List library image categories
       description: |
-        List your library image categories, newest first, cursor-paginated. Categories are not
-        in the search index, so there is no `search`: look one up with the exact `name` filter.
+        List your library image categories, newest first, cursor-paginated. As in the portal,
+        which lists a type's categories all at once, there is no `search`: look one up with the
+        exact `name` filter.
         Sending `search` returns `422`.
         Requires **assets:read** ability.
       operationId: listLibraryImageCategories
@@ -2093,7 +2106,9 @@ paths:
           in: query
           description: |
             Search by name, ranked by relevance through the search index (partial words and
-            small typos match). Cannot be combined with `name`.
+            small typos match), as the portal's image library does. Names are split into words
+            at spaces, `-` and `_`, so `mask` finds `SKU123_mask`. A leading `-` is read as part
+            of the text, not as an exclusion. Cannot be combined with `name`.
           schema:
             type: string
             maxLength: 255
@@ -2127,8 +2142,15 @@ paths:
       summary: Upload a library image
       description: |
         Upload one library image: `upload_id` from `POST /uploads`, or `url` (see "Asset
-        Libraries"). PNG, JPEG, GIF or WebP; it is processed in the background and returns
-        `status: processing`. Multipart uploads are not accepted.
+        Libraries"). Multipart uploads are not accepted.
+
+        The file must be a format its `type` takes (see "Library Images"; a `mask` must carry
+        transparency):
+        - A raster image is processed in the background and returns `status: processing`.
+          At most 128 megapixels; a larger image, or one whose size cannot be read, is a `422`.
+        - An SVG must have a `viewBox`. It is kept as a vector and returns `status: ready`.
+
+        A file that is refused is removed, so create a new upload to try again.
         Requires **assets:write** ability.
       operationId: createLibraryImage
       security:
@@ -2152,7 +2174,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/LibraryImage'
         '201':
-          description: "Library image created with `status: processing`."
+          description: "Library image created: `status: processing` for a raster image, `ready` for an SVG."
           content:
             application/json:
               schema:
@@ -2584,7 +2606,9 @@ components:
       in: query
       description: |
         Search by name, ranked by relevance through the search index (partial words and small
-        typos match). Results are page-numbered. Cannot be combined with `name`.
+        typos match). Names are split into words at spaces, `-` and `_`, so `BG` finds
+        `SKU123_BG`. A leading `-` is read as part of the text, not as an exclusion. Results are
+        page-numbered. Cannot be combined with `name`.
       schema:
         type: string
         maxLength: 255
@@ -4383,6 +4407,12 @@ components:
           nullable: true
           description: The category this one is nested under, or `null` for a top-level category.
           example: null
+        clipart_max_width:
+          type: integer
+          description: |
+            The category's preview size in px (the portal's "Preview size"). A category made
+            before this field was limited may hold a value outside `ClipartPreviewSize`.
+          example: 1000
         created_at:
           type: string
           format: date-time
@@ -4391,6 +4421,15 @@ components:
           type: string
           format: date-time
           example: "2026-10-08T10:30:00Z"
+
+    ClipartPreviewSize:
+      type: integer
+      enum: [100, 150, 200, 250, 300, 400, 500, 700, 1000, 1600]
+      description: |
+        Preview size in px: the largest width a clipart of the category is shown at on the
+        storefront -- the portal's "Preview size", with the same options. Defaults to your
+        account's clipart max width (500 unless changed).
+      example: 1000
 
     ClipartUploadFields:
       type: object
@@ -4516,11 +4555,11 @@ components:
               description: The `upload_url` stops working after this time.
               example: "2026-10-08T10:35:00Z"
 
-    LayerImageCategoryPage:
+    LayerImageCategoryCursorPage:
       type: object
-      description: "A page of layer image categories: cursor-paginated for a listing, page-numbered for a search."
+      description: "Cursor-paginated list of layer image categories."
       allOf:
-        - $ref: '#/components/schemas/AssetPageEnvelope'
+        - $ref: '#/components/schemas/CursorPageEnvelope'
         - type: object
           properties:
             data:
