@@ -26,6 +26,14 @@ export function specOperations(spec: any): SpecOperation[] {
       .filter((method) => pathItem[method])
       .map((method) => {
         const operation = pathItem[method]
+
+        // The page is named by its operationId, so an operation without one is
+        // published at /undefined and is missing from its own URL. Nothing else
+        // notices, so the build stops here instead.
+        if (!operation.operationId) {
+          throw new Error(`${method.toUpperCase()} ${path} has no operationId, so it has no page to be published at.`)
+        }
+
         return {
           operationId: operation.operationId,
           method: method.toUpperCase(),
