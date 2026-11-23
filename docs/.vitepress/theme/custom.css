@@ -1,0 +1,395 @@
+/* ================================================================
+   Teeinblue API Docs theme
+   Neutral greys, as on the fal, Resend, Vercel, Tailwind and Replicate
+   docs, with the accent kept to active navigation, as on fal.
+   Greys: Tailwind v3 neutral. Accent: Teeinblue blue (#3366ff).
+   https://github.com/tailwindlabs/tailwindcss/blob/v3.4.17/src/public/colors.js
+   ================================================================ */
+
+/* ---- Typography ---- */
+/* Inter for the docs; the portal itself is on Roboto. */
+:root {
+  --vp-font-family-base: 'Inter', system-ui, -apple-system, sans-serif;
+  --vp-font-family-mono: 'Fira Code', ui-monospace, 'Cascadia Code', monospace;
+}
+
+/* -0.025em is the h1 tracking measured on fal, Resend, Replicate and Tailwind docs. */
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3,
+.VPHero .name,
+.VPHero .text {
+  letter-spacing: -0.025em;
+}
+
+@media (min-width: 768px) {
+  .vp-doc h1 {
+    font-size: 36px;
+  }
+}
+
+.vp-doc h2 {
+  border-top: none;
+  padding-top: 0;
+}
+
+/* VitePress offsets the h2 anchor by its default 24px padding-top, removed above. */
+.vp-doc h2 .header-anchor {
+  top: 0;
+}
+
+/* Body copy sits a step lighter than headings, as on fal, Resend and Stripe. */
+.vp-doc {
+  color: var(--tib-c-text-body);
+}
+
+.vp-doc :is(h1, h2, h3, h4, h5, h6, strong) {
+  color: var(--vp-c-text-1);
+}
+
+/* ---- Light ---- */
+:root {
+  --vp-c-bg: #ffffff;
+  --vp-c-bg-alt: #fafafa;
+  --vp-c-bg-elv: #ffffff;
+  --vp-c-bg-soft: #f5f5f5;
+
+  --vp-c-text-1: #171717;
+  --tib-c-text-body: #404040;
+  --vp-c-text-2: #525252;
+  --vp-c-text-3: #737373;
+
+  --vp-c-border: #d4d4d4;
+  --vp-c-divider: #e5e5e5;
+  --vp-c-gutter: #e5e5e5;
+
+  --vp-c-default-1: #d4d4d4;
+  --vp-c-default-2: #e5e5e5;
+  --vp-c-default-3: #f5f5f5;
+  --vp-c-default-soft: rgba(115, 115, 115, 0.14);
+
+  /* #3366ff, the portal's primary, is 4.68:1 as text on white -- just over
+     WCAG AA for body text. The hover shade is darker still, at 6.6:1. */
+  --vp-c-brand-1: #3366ff;
+  --vp-c-brand-2: #2952cc;
+  --vp-c-brand-3: #3366ff;
+  --vp-c-brand-soft: rgba(51, 102, 255, 0.14);
+
+  /* Near-black primary buttons, as on Vercel, Resend and BFL. */
+  --vp-button-brand-bg: #171717;
+  --vp-button-brand-hover-bg: #404040;
+  --vp-button-brand-active-bg: #0a0a0a;
+  --vp-button-brand-border: transparent;
+  --vp-button-brand-hover-border: transparent;
+  --vp-button-brand-active-border: transparent;
+  --vp-button-brand-text: #ffffff;
+  --vp-button-brand-hover-text: #ffffff;
+  --vp-button-brand-active-text: #ffffff;
+
+  --vp-code-color: var(--vp-c-text-1);
+  --vp-code-bg: var(--vp-c-bg-soft);
+  --vp-code-link-color: var(--vp-c-text-1);
+  --vp-code-link-hover-color: var(--vp-c-text-1);
+
+  --vp-sidebar-bg-color: var(--vp-c-bg);
+
+  --vp-home-hero-name-color: var(--vp-c-text-1);
+}
+
+/* ---- Dark ---- */
+/* Material's dark theme: #121212 surface, lighter surfaces for elevation
+   (1dp +5% white = #1e1e1e, 8dp +12% = #2e2e2e), and light desaturated
+   accents. https://m2.material.io/design/color/dark-theme.html */
+.dark {
+  --vp-c-bg: #121212;
+  --vp-c-bg-alt: #1e1e1e;
+  --vp-c-bg-elv: #2e2e2e;
+  --vp-c-bg-soft: #1e1e1e;
+
+  --vp-c-text-1: #e5e5e5;
+  --tib-c-text-body: #d4d4d4;
+  --vp-c-text-2: #a3a3a3;
+  --vp-c-text-3: #737373;
+
+  --vp-c-border: #404040;
+  --vp-c-divider: #262626;
+  --vp-c-gutter: #0a0a0a;
+
+  --vp-c-default-1: #525252;
+  --vp-c-default-2: #404040;
+  --vp-c-default-3: #262626;
+  --vp-c-default-soft: rgba(115, 115, 115, 0.16);
+
+  --vp-c-brand-1: #99b3ff;
+  --vp-c-brand-2: #6d94ff;
+  --vp-c-brand-3: #3366ff;
+  --vp-c-brand-soft: rgba(51, 102, 255, 0.16);
+
+  --vp-button-brand-bg: #e5e5e5;
+  --vp-button-brand-hover-bg: #d4d4d4;
+  --vp-button-brand-active-bg: #a3a3a3;
+  --vp-button-brand-text: #171717;
+  --vp-button-brand-hover-text: #171717;
+  --vp-button-brand-active-text: #171717;
+}
+
+/* ---- Nav Bar ---- */
+.VPNavBar {
+  border-bottom: 1px solid var(--vp-c-divider) !important;
+}
+
+.dark .VPNavBar {
+  background: color-mix(in srgb, var(--vp-c-bg) 80%, transparent) !important;
+  backdrop-filter: blur(16px) saturate(180%);
+}
+
+.VPNavBarTitle .title {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+/* ---- Sidebar ---- */
+.VPSidebar {
+  border-right: 1px solid var(--vp-c-divider);
+}
+
+/* The theme draws a guide line and an active bar only from level 2 down;
+   fal and Tailwind docs use the same treatment for top-level pages. */
+.VPSidebarItem.level-0 > .items {
+  border-left: 1px solid var(--vp-c-divider);
+  padding-left: 16px;
+}
+
+.VPSidebarItem.level-1.is-active > .item > .indicator {
+  background-color: var(--vp-c-brand-1);
+}
+
+/* An endpoint's row, from vitepress-openapi's sidebar. The plugin centres the
+   method badge against the name and pushes the row right, so a name that wraps
+   leaves the badge floating mid-row and the badges out of line. Here the badges
+   form one column, level with the name's first line, with a gap before it. */
+.OASidebarItem {
+  justify-content: flex-start;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0;
+}
+
+.OASidebarItem-badge {
+  flex: none;
+  width: 3.25rem;
+  text-align: center;
+}
+
+/* As specific as the plugin's own space-x margin on the badge, which it
+   replaces with the gap above. */
+.OASidebarItem > .OASidebarItem-badge:not(:last-child) {
+  margin: 2px 0 0;
+}
+
+/* ---- Hero ---- */
+.VPHero .name {
+  font-size: clamp(2.5rem, 6vw, 4rem);
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.VPHero .text {
+  font-size: clamp(1.4rem, 3.5vw, 2.2rem);
+  font-weight: 600;
+  color: var(--vp-c-text-2);
+  line-height: 1.3;
+}
+
+.VPHero .tagline {
+  font-size: 1.1rem;
+  line-height: 1.6;
+  max-width: 560px;
+  color: var(--vp-c-text-2);
+}
+
+.VPHero .actions .VPButton {
+  border-radius: 8px;
+  font-weight: 600;
+  padding: 0 24px;
+  height: 44px;
+}
+
+/* ---- Feature Cards ---- */
+.VPFeatures {
+  padding-top: 48px;
+}
+
+.VPFeature {
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 12px;
+  padding: 28px 24px;
+  transition: border-color 0.3s ease;
+}
+
+.VPFeature:hover {
+  border-color: var(--vp-c-border);
+}
+
+.VPFeature .title {
+  font-weight: 600;
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+.VPFeature .details {
+  font-size: 0.875rem;
+  color: var(--vp-c-text-2);
+  line-height: 1.6;
+}
+
+/* ---- Code Blocks ---- */
+.vp-doc div[class*='language-'] {
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 10px;
+  margin: 20px 0;
+}
+
+.vp-doc div[class*='language-'] code {
+  font-size: 0.85rem;
+  line-height: 1.7;
+}
+
+/* Bordered chip, as on Vercel and Stripe. */
+.vp-doc :not(pre) > code {
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 4px;
+  padding: 2px 5px;
+  font-size: 0.85em;
+}
+
+/* ---- Content ---- */
+.vp-doc {
+  line-height: 1.75;
+}
+
+.vp-doc p {
+  margin: 16px 0;
+}
+
+/* Links in body copy keep the text color and carry an underline, as on
+   Vercel, Tailwind, Replicate and fal; the accent stays for navigation. */
+.vp-doc a {
+  color: var(--vp-c-text-1);
+  text-decoration-color: var(--vp-c-default-1);
+  text-underline-offset: 3px;
+}
+
+.vp-doc a:hover {
+  color: var(--vp-c-text-1);
+  text-decoration-color: currentColor;
+}
+
+/* ---- Tables ---- */
+.vp-doc table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 20px 0;
+  font-size: 0.875rem;
+}
+
+.vp-doc th {
+  font-weight: 600;
+  font-size: 0.8rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--vp-c-text-2);
+  border-bottom: 2px solid var(--vp-c-border);
+  padding: 10px 16px;
+}
+
+.vp-doc td {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--vp-c-divider);
+}
+
+/* ---- Custom Containers ---- */
+.vp-doc .custom-block {
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin: 20px 0;
+  border-left: 4px solid;
+}
+
+.vp-doc .custom-block.tip {
+  border-left-color: var(--vp-c-brand-1);
+  background: var(--vp-c-brand-soft);
+}
+
+/* ---- On This Page (Outline) ---- */
+.VPDocAsideOutline .outline-title {
+  font-weight: 600;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* ---- Footer ---- */
+.VPFooter {
+  border-top: 1px solid var(--vp-c-divider) !important;
+}
+
+.VPFooter .message,
+.VPFooter .copyright {
+  font-size: 0.8rem;
+  color: var(--vp-c-text-3);
+}
+
+/* ---- Scrollbar ---- */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--vp-c-default-2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--vp-c-default-1);
+}
+
+/* ---- Search ---- */
+button.VPNavBarSearchButton {
+  border-radius: 8px !important;
+  padding: 6px 14px !important;
+  min-height: 40px !important;
+  width: 100% !important;
+  justify-content: flex-start !important;
+}
+
+button.VPNavBarSearchButton .keys {
+  margin-left: auto !important;
+}
+
+/* ---- Page transition ---- */
+.VPContent {
+  transition: opacity 0.2s ease;
+}
+
+/* ---- OpenAPI plugin refinements ---- */
+.openapi-operation {
+  font-family: var(--vp-font-family-base);
+}
+
+.openapi-operation code {
+  font-family: var(--vp-font-family-mono);
+}
+
+/* VitePress puts the heading's # link 24px down, to clear the padding its h2
+   has; the Samples h2 in the operation's right column has none, so the link
+   sat below its heading. vitepress-openapi zeroes it on its other headings. */
+.OAPathContentEnd .vp-doc h2 .header-anchor,
+.OAPathContentEnd h2 .header-anchor {
+  top: 0;
+}

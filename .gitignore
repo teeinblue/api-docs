@@ -1,0 +1,8 @@
+node_modules/
+docs/.vitepress/cache/
+docs/.vitepress/dist/
+.env
+
+# Generated from the YAML specs by scripts/sync-openapi.mjs on every dev/build run.
+docs/public/openapi.json
+docs/public/partner-openapi.json
