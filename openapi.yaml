@@ -60,7 +60,34 @@ tags:
   - name: Customizations
     description: Read-only access to customizations
   - name: Products
-    description: Read-only access to products
+    description: |
+      Read-only access to products.
+
+      **Mapping a variant to its print areas.** An order's line item tells you the
+      `printarea_id` of each design (see "Orders"), but not which print areas a given
+      *variant* actually uses -- for that, call `GET /products/{id}` and combine:
+
+      - `printareas[].id` -- every print area the product defines, with its human-readable
+        `name` (e.g. `"front"`, `"back"`).
+      - `variants[].printarea_ids` -- which of those print area ids apply to one variant.
+
+      ```json
+      {
+        "printareas": [
+          { "id": 101, "name": "front" },
+          { "id": 102, "name": "back" }
+        ],
+        "variants": [
+          { "id": 555, "sku": "TSHIRT-LG-NAVY", "printarea_ids": [101] }
+        ]
+      }
+      ```
+
+      Variant `555` only prints on the front (`101`). The same `printarea_id` is what an
+      order's `print_areas[]` carries, so matching the two tells you exactly which design
+      file belongs to which print area -- including when a line item has more than one
+      print area sharing the same `name`/`key`, since `printarea_id` (unlike the name) is
+      always unique.
 
   - name: Asset Libraries
     description: |
@@ -3347,6 +3374,14 @@ components:
           type: integer
           description: "Unique identifier for this print area artwork"
           example: 567
+        printarea_id:
+          type: integer
+          nullable: true
+          description: |
+            ID of the product's print area this design belongs to (see `printareas[].id`
+            on "Get product by ID"). Unlike `key`, this is always unique -- use it, not
+            `key`, when a line item has more than one print area sharing the same `key`.
+          example: 101
         customization_id:
           type: integer
           nullable: true
@@ -4065,6 +4100,14 @@ components:
           type: string
           description: "Internal tags of the product"
           example: "holiday, t-shirt"
+        default_options:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: |
+            Required Options configured on this product base -- merchant-defined key/value
+            data fulfillment partners may need (e.g. a print preset id). Null if none are set.
+          example: { "preset_id": "ABC123" }
         created_at:
           type: string
           format: date-time
@@ -4192,6 +4235,15 @@ components:
           type: string
           description: "Size of the variant"
           example: "Large"
+        printarea_ids:
+          type: array
+          items:
+            type: integer
+          description: |
+            IDs of the print areas (see `printareas` on this product) this variant prints on.
+            Match these against an order item's `print_areas[].printarea_id` to tell which
+            design file belongs to which print area for this variant.
+          example: [101]
 
     # -------------------------------------------------------------------------
     # Asset libraries
