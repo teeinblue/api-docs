@@ -12,7 +12,7 @@ const partnerSpec = readSpec('partner-openapi')
  * Every generated page, keyed by its path under docs/. Both the endpoint pages
  * ([operationId].paths.ts) and the tag pages (groups/[slug].paths.ts) are made up
  * at build time, so their files hold no words for the search to read: this is what
- * it reads instead, in _splitIntoSections below.
+ * it reads instead, in _render and _splitIntoSections below.
  */
 const generatedPages = new Map<string, { titles: string[]; text: string }>()
 
@@ -31,6 +31,12 @@ for (const [prefix, spec] of [['api', publicSpec], ['partner-api', partnerSpec]]
     })
   }
 }
+
+/**
+ * The generated page a markdown path stands for, absolute or relative to docs/.
+ */
+const generatedPageAt = (path: string) =>
+  generatedPages.get(path.replace(/\\/g, '/').match(/((?:partner-)?api\/(?:groups\/)?[^/]+)\.md$/)?.[1] ?? '')
 
 /** The tag pages of a spec, as the sidebar lists them. */
 const groupLinks = (spec: any, prefix: string) =>
@@ -86,9 +92,22 @@ export default defineConfig({
     search: {
       provider: 'local',
       options: {
+        // A generated page has no file of its own, so the indexer reads it from
+        // disk as empty and drops it before _splitIntoSections is ever reached.
+        // Hand it the page's own words instead; a real page renders as usual.
+        async _render(src, env, md) {
+          const page = generatedPageAt(env.relativePath)
+          if (page) return `<h1>${page.titles.at(-1) ?? ''}</h1><p>${page.text}</p>`
+
+          const html = await md.renderAsync(src, env)
+          return env.frontmatter?.search === false ? '' : html
+        },
+
         miniSearch: {
+          // Indexed as one section per page: a generated page carries no
+          // headings to split on, and its own URL is where a hit should land.
           _splitIntoSections(file: string) {
-            const page = generatedPages.get(file.match(/\/((?:partner-)?api\/(?:groups\/)?[^/]+)\.md$/)?.[1] ?? '')
+            const page = generatedPageAt(file)
             if (!page) return undefined
             return [{ anchor: '', titles: page.titles, text: page.text }]
           },
